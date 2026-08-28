@@ -8,7 +8,8 @@ import logoImg from "./assets/logo.jpg";
 import photoImg from "./assets/chorale-photo.jpg";
 import photoImg2 from "./assets/chorale-photo-2.jpg";
 import photoImg3 from "./assets/chorale-photo-3.jpg";
-import { supabase } from "./supabaseClient";import StaffRenderer from "./components/StaffRenderer";import NotationFlashcards from "./components/NotationFlashcards";import RhythmGame from "./components/RhythmGame";
+import { supabase } from "./supabaseClient";
+import { CHOIR_NAME, CHOIR_NAME_SHORT, CHOIR_COUNTRY, WHATSAPP_GROUP_LINK, VAPID_PUBLIC_KEY, PRIVACY_POLICY_TEXT, ABOUT_TEXT } from "./config";import StaffRenderer from "./components/StaffRenderer";import NotationFlashcards from "./components/NotationFlashcards";import RhythmGame from "./components/RhythmGame";
 import { generateICS, downloadICS } from './utils/dvbc-ics-export.js';
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -43,9 +44,7 @@ function gradient() {
   return `linear-gradient(135deg, ${C.garnetDark} 0%, ${C.garnet} 45%, ${C.plum} 100%)`;
 }
 const VOICE_PARTS = ["Soprano I", "Soprano II", "Alto I", "Alto II", "Tenor I", "Tenor II", "Bass I", "Bass II"];
-const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/625qw7lnZ6C7tYDOs7ioC3?s=sh&p=a&mlu=4";
 const HERO_PHOTOS = [photoImg, photoImg2, photoImg3];
-const VAPID_PUBLIC_KEY = "BDzWf6BxsVtZVzYvLjyGQhjDhelmBo80UzyOW_MWrIyft90hWzOK_uq7e8C9aCtdLxWURx4KkBv0v_THjrJxu2s";
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -243,7 +242,7 @@ function HeroCarousel({ photos, height = 190, intervalMs = 4500 }) {
       {photos.map((src, i) => (
         <img
           key={src}
-          src={src} alt="De Voci Belli Chorale members"
+          src={src} alt={`${CHOIR_NAME} members`}
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block",
             opacity: i === index ? 1 : 0, transition: "opacity 0.6s ease",
@@ -304,7 +303,7 @@ function ConfettiBurst({ burstKey }) {
 
 /* ---------- First-time onboarding tour ---------- */
 const ONBOARDING_SLIDES = [
-  { Icon: Home, title: "Welcome to DVBC", body: "Your home for rehearsals, scores, and everything chorale — all in one place." },
+  { Icon: Home, title: `Welcome to ${CHOIR_NAME_SHORT}`, body: "Your home for rehearsals, scores, and everything chorale — all in one place." },
   { Icon: CheckSquare, title: "Track Attendance", body: "Check in to rehearsals and events right from your phone the moment check-in opens." },
   { Icon: Music2, title: "Announcements & Library", body: "Catch every update on Home, and pull up scores or recordings anytime in Library." },
 ];
@@ -400,92 +399,6 @@ function OnboardingTour({ profile }) {
     </div>
   );
 }
-
-const PRIVACY_POLICY_TEXT = `Effective Date: July 31, 2026
-
-At De Voci Belli Chorale, we value your privacy and are committed to protecting the personal information you provide when using our application. This Privacy Policy explains how we collect, use, store, and safeguard your information.
-
-1. Information We Collect
-
-We may collect the following information:
-
-- Full name
-- Email address
-- Phone number
-- Date of birth
-- Residential address
-- Profile photograph (where applicable)
-- Educational or professional information (if required)
-- Device information, such as IP address, browser type, and operating system
-- Information about how you use the application
-
-2. How We Use Your Information
-
-We use your information to:
-
-- Create and manage your account.
-- Process applications and registrations.
-- Communicate important updates and announcements.
-- Respond to inquiries and provide support.
-- Improve the performance and functionality of the application.
-- Maintain the security and integrity of our services.
-- Comply with legal obligations where applicable.
-
-3. Data Sharing
-
-We do not sell, rent, or trade your personal information. Your information may be shared only:
-
-- With trusted service providers who help operate the application.
-- When required by law or a valid legal process.
-- To protect the rights, safety, or property of De Voci Belli Chorale or its users.
-
-4. Data Security
-
-We implement appropriate technical and organizational measures to protect your personal information from unauthorized access, alteration, disclosure, or destruction. While we strive to use commercially acceptable means to protect your information, no internet-based service can guarantee absolute security.
-
-5. Data Retention
-
-We retain your information only for as long as necessary to provide our services, fulfill legal obligations, resolve disputes, and enforce our policies. When your information is no longer required, it will be securely deleted or anonymized.
-
-6. Your Rights
-
-Depending on applicable laws, you may have the right to:
-
-- Access your personal information.
-- Request correction of inaccurate information.
-- Request deletion of your personal data.
-- Withdraw consent where applicable.
-- Contact us regarding any concerns about your privacy.
-
-7. Children's Privacy
-
-Our application is not intended for children under the age required by applicable law without parental or guardian consent. We do not knowingly collect personal information from children without appropriate authorization.
-
-8. Third-Party Services
-
-Our application may use trusted third-party services for hosting, authentication, analytics, notifications, or payment processing. These providers have their own privacy policies governing how they handle your information.
-
-9. Changes to This Privacy Policy
-
-We may update this Privacy Policy from time to time. Any changes will be posted within the application with an updated effective date. Continued use of the application after such updates constitutes acceptance of the revised policy.
-
-10. Contact Us
-
-If you have any questions or concerns regarding this Privacy Policy or the handling of your personal information, please contact us through the official communication channels provided by De Voci Belli Chorale.
-
-By using this application, you acknowledge that you have read, understood, and agreed to this Privacy Policy.`;
-
-const ABOUT_TEXT = `De Voci Belli Chorale is a vibrant community of passionate young musicians united by a shared commitment to showcasing the beauty, power, and excellence of choral music. Founded on the belief that music is a universal language capable of inspiring hearts and transforming lives, the chorale serves as a platform where talent is nurtured, creativity flourishes, and lasting friendships are built.
-
-Our repertoire spans classical, sacred, gospel, African art music, folk, and contemporary choral works, reflecting both our rich cultural heritage and the timeless traditions of choral excellence. Every performance is approached with artistic integrity, disciplined musicianship, and a deep desire to create meaningful musical experiences for our audiences.
-
-Beyond the stage, De Voci Belli Chorale is committed to developing young singers through musical education, vocal training, mentorship, and collaborative learning. We believe that every rehearsal is an opportunity for growth, every concert is an opportunity to inspire, and every voice contributes to a greater harmony.
-
-As ambassadors of choral music, we strive to promote excellence, preserve musical heritage, foster unity through song, and positively impact our communities. Through our music, we seek not only to entertain but also to uplift, educate, and leave a lasting impression wherever our voices are heard.
-
-Our Vision: To be a leading choral ensemble recognized for artistic excellence, innovation, and meaningful musical impact.
-
-Our Mission: To inspire lives and celebrate the beauty of music through exceptional choral performances, continuous musical development, and service to our community.`;
 
 /* ---------- Avatar upload constraints (match the `avatars` storage bucket config) ---------- */
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -702,7 +615,7 @@ function Badge() {
       border: `2px solid ${C.lilac}`, boxShadow: "0 4px 14px rgba(76,46,158,0.22)",
       flexShrink: 0, background: "#fff",
     }}>
-      <img src={logoImg} alt="De Voci Belli Chorale" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      <img src={logoImg} alt={CHOIR_NAME} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
     </div>
   );
 }
@@ -845,9 +758,9 @@ function LoginScreen({ onAuthed }) {
           </div>
         </div>
         <div style={{ color: "#fff", fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600 }}>
-          De Voci Belli <span style={{ fontStyle: "italic", color: C.lilac }}>Chorale</span>
+          <span style={{ fontStyle: "italic", color: C.lilac }}>{CHOIR_NAME}</span>
         </div>
-        <div style={{ color: C.lilac, fontSize: 11, letterSpacing: 4, fontWeight: 700, marginTop: 3 }}>NIGERIA</div>
+        <div style={{ color: C.lilac, fontSize: 11, letterSpacing: 4, fontWeight: 700, marginTop: 3 }}>{CHOIR_COUNTRY}</div>
         <div style={{ margin: "18px 30px 0" }}><Staff light /></div>
         <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11.5, letterSpacing: 2, fontWeight: 600, marginTop: 14 }}>
           MEMBERS PORTAL
@@ -1013,7 +926,7 @@ function ResetPasswordScreen({ onDone }) {
           </div>
         </div>
         <div style={{ color: "#fff", fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600 }}>
-          De Voci Belli <span style={{ fontStyle: "italic", color: C.lilac }}>Chorale</span>
+          <span style={{ fontStyle: "italic", color: C.lilac }}>{CHOIR_NAME}</span>
         </div>
         <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11.5, letterSpacing: 2, fontWeight: 600, marginTop: 14 }}>
           SET A NEW PASSWORD
@@ -1088,9 +1001,9 @@ function PendingApproval({ profile, onLogout }) {
           </div>
         </div>
         <div style={{ color: "#fff", fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600 }}>
-          De Voci Belli <span style={{ fontStyle: "italic", color: C.lilac }}>Chorale</span>
+          <span style={{ fontStyle: "italic", color: C.lilac }}>{CHOIR_NAME}</span>
         </div>
-        <div style={{ color: C.lilac, fontSize: 11, letterSpacing: 4, fontWeight: 700, marginTop: 3 }}>NIGERIA</div>
+        <div style={{ color: C.lilac, fontSize: 11, letterSpacing: 4, fontWeight: 700, marginTop: 3 }}>{CHOIR_COUNTRY}</div>
       </div>
 
       <div style={{ flex: 1, background: C.parchment, borderRadius: "26px 26px 0 0", marginTop: -18, padding: "40px 26px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
@@ -1653,7 +1566,7 @@ function CumulativeRegister({ members, loadingMembers }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `dvbc-attendance-register-${activeRange.key}.csv`;
+    a.download = `attendance-register-${activeRange.key}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1667,7 +1580,7 @@ function CumulativeRegister({ members, loadingMembers }) {
       const rate = stats.total ? `${Math.round((stats.present / stats.total) * 100)}%` : "—";
       return `<tr><td>${section}</td><td>${m.name}</td><td>${m.part}</td><td>${stats.present}</td><td>${stats.absent}</td><td>${stats.excused}</td><td>${stats.total}</td><td>${rate}</td></tr>`;
     }).join("");
-    win.document.write(`<!DOCTYPE html><html><head><title>DVBC Attendance Register</title>
+    win.document.write(`<!DOCTYPE html><html><head><title>${CHOIR_NAME_SHORT} Attendance Register</title>
       <style>
         body{font-family:Arial,sans-serif;padding:24px;color:#231A3B;}
         h1{font-size:18px;margin-bottom:2px;}
@@ -1676,7 +1589,7 @@ function CumulativeRegister({ members, loadingMembers }) {
         th,td{border:1px solid #ddd;padding:6px 8px;font-size:12px;text-align:left;}
         th{background:#f1edfc;}
       </style></head><body>
-      <h1>DVBC Cumulative Attendance Register</h1>
+      <h1>${CHOIR_NAME_SHORT} Cumulative Attendance Register</h1>
       <p>Range: ${activeRange.label} · ${rangeRehearsalCount} rehearsal${rangeRehearsalCount === 1 ? "" : "s"} · Generated ${new Date().toLocaleDateString()}</p>
       <table><thead><tr><th>Section</th><th>Name</th><th>Part</th><th>Present</th><th>Absent</th><th>Excused</th><th>Total</th><th>Rate</th></tr></thead>
       <tbody>${tableRows}</tbody></table>
@@ -4288,7 +4201,7 @@ function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onR
           { label: "Executives", nav: "executives" },
           ...(isAdmin ? [{ label: "Communication Settings", nav: "communication" }] : []),
           { label: "Privacy", nav: "privacy" },
-          { label: "About De Voci Belli Chorale", nav: "about" },
+          { label: `About ${CHOIR_NAME}`, nav: "about" },
         ].map(({ label, nav }) => (
           <div
             key={label}
@@ -7368,7 +7281,7 @@ class ErrorBoundary extends React.Component {
     return { hasError: true };
   }
   componentDidCatch(error, info) {
-    console.error("DVBC screen crashed:", error, info);
+    console.error("App screen crashed:", error, info);
   }
   render() {
     if (this.state.hasError) {
@@ -8318,7 +8231,7 @@ export default function App() {
     return;
   }
   haptic(10);
-  const icsContent = generateICS(upcomingEvents, "De Voci Belli Chorale Rehearsals");
+  const icsContent = generateICS(upcomingEvents, `${CHOIR_NAME} Rehearsals`);
   const filename = `dvbc-rehearsals-${new Date().toISOString().slice(0, 10)}.ics`;
   downloadICS(icsContent, filename);
   setToast({ title: "Calendar exported", body: `${upcomingEvents.length} rehearsal(s) ready to import.` });
