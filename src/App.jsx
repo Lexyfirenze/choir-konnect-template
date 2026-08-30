@@ -809,7 +809,7 @@ function LoginScreen({ onAuthed }) {
             <Mail size={16} color={C.inkSoft} />
             <input
               value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@devocibelli.org" type="email"
+              placeholder="you@example.com" type="email"
               style={{ border: "none", outline: "none", fontSize: 13.5, flex: 1, background: "transparent", color: C.ink }}
             />
           </div>
