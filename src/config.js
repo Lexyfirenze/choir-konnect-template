@@ -12,7 +12,7 @@ export const WHATSAPP_GROUP_LINK = "";
 // Generate your own VAPID keypair for push notifications — DO NOT reuse another
 // choir's keys. Run: npx web-push generate-vapid-keys
 // Paste the PUBLIC key here; the PRIVATE key goes in your push-notification edge function's secrets, not here.
-export const VAPID_PUBLIC_KEY = "";
+export const VAPID_PUBLIC_KEY = "BAZyEOWFTl9Rkt1xdHl5uA2mT0wxN5nAXfm1tpEO8OEN0Xlup_Yfz6j8FFPFdeAoEhmx4GMWgZt96EGfr3jUUoI";
 
 export const PRIVACY_POLICY_TEXT = `Effective Date: [DATE]
 
