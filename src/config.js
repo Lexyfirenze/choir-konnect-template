@@ -2,9 +2,9 @@
 /* Edit everything in this file to brand the app for your own choir.  */
 /* Nothing in App.jsx should need to change for a rebrand — it all reads from here. */
 
-export const CHOIR_NAME = "Your Choir Name";          // full name, shown on auth screens
-export const CHOIR_NAME_SHORT = "Your Choir";          // short name, used in filenames/print titles/onboarding
-export const CHOIR_COUNTRY = "YOUR COUNTRY";           // small caps label under the logo on auth screens
+export const CHOIR_NAME = "Choir Konnect";          // full name, shown on auth screens
+export const CHOIR_NAME_SHORT = "Choir Konnect";          // short name, used in filenames/print titles/onboarding
+export const CHOIR_COUNTRY = "";           // small caps label under the logo on auth screens
 
 // Paste your own WhatsApp group invite link (or leave blank to hide the WhatsApp button)
 export const WHATSAPP_GROUP_LINK = "";
