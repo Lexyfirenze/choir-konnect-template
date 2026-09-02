@@ -18,17 +18,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 /* ---------- Design tokens: "Sunday Performance" warm concert-hall palette ---------- */
 /* Actual values live in LIGHT_THEME/DARK_THEME below; this is just the initial shape. */
 const C = {
-  garnet: "#8A2332",
-  garnetDark: "#5C1420",
-  plum: "#C99A3E",
-  accent: "#8A2332",
-  lilac: "#D9B98A",
-  lilacSoft: "#F5E9D3",
-  lilacLine: "#EAD9B8",
-  ink: "#2B2119",
-  inkSoft: "#7A6952",
+  garnet: "#0F1B33",
+  garnetDark: "#081121",
+  plum: "#C9A24B",
+  accent: "#0F1B33",
+  lilac: "#E4C878",
+  lilacSoft: "#F2ECDC",
+  lilacLine: "#E5D9BD",
+  ink: "#1B2438",
+  inkSoft: "#5B6478",
   card: "#FFFFFF",
-  parchment: "#FBF6EC",
+  parchment: "#F6F1E6",
   sage: "#4F7A5C",
   sageBg: "#E7F1E9",
   roseDeep: "#B23368",
@@ -54,17 +54,17 @@ function urlBase64ToUint8Array(base64String) {
 
 /* ---------- Theming: "Sunday Performance" (light) / "Evening Concert" (dark) ---------- */
 const LIGHT_THEME = {
-  garnet: "#8A2332",
-  garnetDark: "#5C1420",
-  plum: "#C99A3E",
-  accent: "#8A2332",
-  lilac: "#D9B98A",
-  lilacSoft: "#F5E9D3",
-  lilacLine: "#EAD9B8",
-  ink: "#2B2119",
-  inkSoft: "#7A6952",
+  garnet: "#0F1B33",
+  garnetDark: "#081121",
+  plum: "#C9A24B",
+  accent: "#0F1B33",
+  lilac: "#E4C878",
+  lilacSoft: "#F2ECDC",
+  lilacLine: "#E5D9BD",
+  ink: "#1B2438",
+  inkSoft: "#5B6478",
   card: "#FFFFFF",
-  parchment: "#FBF6EC",
+  parchment: "#F6F1E6",
   sage: "#4F7A5C",
   sageBg: "#E7F1E9",
   roseDeep: "#B23368",
@@ -73,17 +73,17 @@ const LIGHT_THEME = {
   amberText: "#8A6C24",
 };
 const DARK_THEME = {
-  garnet: "#2A1750",
-  garnetDark: "#140B26",
-  plum: "#E24B9C",
-  accent: "#E24B9C",
-  lilac: "#4A3C7A",
-  lilacSoft: "#241A3D",
-  lilacLine: "#3D2A5C",
-  ink: "#F3ECE0",
-  inkSoft: "#B3A3C9",
-  card: "#1E1436",
-  parchment: "#0F0820",
+  garnet: "#16233F",
+  garnetDark: "#080D1A",
+  plum: "#E4C878",
+  accent: "#E4C878",
+  lilac: "#E4C878",
+  lilacSoft: "#1C2C4D",
+  lilacLine: "#2A3A5C",
+  ink: "#F3EFE4",
+  inkSoft: "#A9B3C9",
+  card: "#16233F",
+  parchment: "#0F1B33",
   sage: "#5FE0A0",
   sageBg: "#173325",
   roseDeep: "#FF6FA8",
@@ -4490,7 +4490,7 @@ function CommunicationSettings({
 }
 
 const BASE_RENDER_SCALE = 2; // fixed high-res render for crisp strokes/text regardless of zoom
-const ANNOTATION_COLORS = ["#8A2332", "#1F5FA8", "#2B7A4B", "#111111"];
+const ANNOTATION_COLORS = ["#0F1B33", "#1F5FA8", "#2B7A4B", "#111111"];
 
 function AnnotatedPdfPage({ pdfDoc, pageNumber, zoomLevel, drawMode, tool, color, strokeWidth, strokes, onStrokeComplete, onNaturalSize }) {
   const renderCanvasRef = useRef(null);
