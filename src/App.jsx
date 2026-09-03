@@ -1195,9 +1195,17 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
         }} />
       </div>
       <div style={{ padding: "calc(env(safe-area-inset-top, 0px) + 20px) 24px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontSize: 12, color: C.inkSoft }}>{greeting}</div>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 23, color: C.ink, marginTop: 2 }}>{displayName}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 9, overflow: "hidden", flexShrink: 0,
+            border: `1.5px solid ${C.lilac}`, background: "#fff",
+          }}>
+            <img src={logoImg} alt={CHOIR_NAME} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: C.inkSoft }}>{greeting}</div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 23, color: C.ink, marginTop: 2 }}>{displayName}</div>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button
@@ -1216,7 +1224,19 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
               </div>
             )}
           </button>
-          <Badge />
+          <button
+            onClick={() => onNav("profile")} className="dvbc-tap"
+            style={{
+              width: 38, height: 38, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+              border: `2px solid ${C.lilac}`, background: "#fff", padding: 0, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontWeight: 600, fontSize: 14, color: C.accent,
+            }}
+          >
+            {profile?.avatar_url
+              ? <img src={profile.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : displayName.charAt(0)}
+          </button>
         </div>
       </div>
       <div style={{ padding: "14px 24px 0" }}><Staff /></div>
