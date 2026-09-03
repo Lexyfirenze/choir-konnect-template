@@ -18,17 +18,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 /* ---------- Design tokens: "Sunday Performance" warm concert-hall palette ---------- */
 /* Actual values live in LIGHT_THEME/DARK_THEME below; this is just the initial shape. */
 const C = {
-  garnet: "#0F1B33",
-  garnetDark: "#081121",
-  plum: "#C9A24B",
-  accent: "#0F1B33",
-  lilac: "#E4C878",
-  lilacSoft: "#F2ECDC",
-  lilacLine: "#E5D9BD",
-  ink: "#1B2438",
-  inkSoft: "#5B6478",
+  garnet: "#0B2635",
+  garnetDark: "#071A26",
+  plum: "#14B8A6",
+  accent: "#0B2635",
+  lilac: "#8FEDE0",
+  lilacSoft: "#E3F5F1",
+  lilacLine: "#D9E5E2",
+  ink: "#102B39",
+  inkSoft: "#5B7480",
   card: "#FFFFFF",
-  parchment: "#F6F1E6",
+  parchment: "#F1EAD9",
   sage: "#4F7A5C",
   sageBg: "#E7F1E9",
   roseDeep: "#B23368",
@@ -54,17 +54,17 @@ function urlBase64ToUint8Array(base64String) {
 
 /* ---------- Theming: "Sunday Performance" (light) / "Evening Concert" (dark) ---------- */
 const LIGHT_THEME = {
-  garnet: "#0F1B33",
-  garnetDark: "#081121",
-  plum: "#C9A24B",
-  accent: "#0F1B33",
-  lilac: "#E4C878",
-  lilacSoft: "#F2ECDC",
-  lilacLine: "#E5D9BD",
-  ink: "#1B2438",
-  inkSoft: "#5B6478",
+  garnet: "#0B2635",
+  garnetDark: "#071A26",
+  plum: "#14B8A6",
+  accent: "#0B2635",
+  lilac: "#8FEDE0",
+  lilacSoft: "#E3F5F1",
+  lilacLine: "#D9E5E2",
+  ink: "#102B39",
+  inkSoft: "#5B7480",
   card: "#FFFFFF",
-  parchment: "#F6F1E6",
+  parchment: "#F1EAD9",
   sage: "#4F7A5C",
   sageBg: "#E7F1E9",
   roseDeep: "#B23368",
@@ -73,17 +73,17 @@ const LIGHT_THEME = {
   amberText: "#8A6C24",
 };
 const DARK_THEME = {
-  garnet: "#16233F",
-  garnetDark: "#080D1A",
-  plum: "#E4C878",
-  accent: "#E4C878",
-  lilac: "#E4C878",
-  lilacSoft: "#1C2C4D",
-  lilacLine: "#2A3A5C",
-  ink: "#F3EFE4",
-  inkSoft: "#A9B3C9",
-  card: "#16233F",
-  parchment: "#0F1B33",
+  garnet: "#123449",
+  garnetDark: "#050F17",
+  plum: "#14B8A6",
+  accent: "#14B8A6",
+  lilac: "#8FEDE0",
+  lilacSoft: "#1A4258",
+  lilacLine: "#25506A",
+  ink: "#EAF6F3",
+  inkSoft: "#9FC3C8",
+  card: "#123449",
+  parchment: "#0B2635",
   sage: "#5FE0A0",
   sageBg: "#173325",
   roseDeep: "#FF6FA8",
@@ -1271,21 +1271,31 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
         )}
 
         <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-          <button onClick={() => onNav("attendance")} className="dvbc-tap" style={{ flex: 1, textAlign: "left", background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 16, cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
-            <RingProgress value={attendancePct ?? 0} size={46} strokeWidth={5} color={C.garnet} track={C.lilacLine}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.accent }}>{attendancePct === null ? "—" : `${attendancePct}%`}</span>
+          <button onClick={() => onNav("attendance")} className="dvbc-tap" style={{ flex: 1, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, textAlign: "center", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 96 }}>
+            <RingProgress value={attendancePct ?? 0} size={38} strokeWidth={4.5} color={C.garnet} track={C.lilacLine}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.accent }}>{attendancePct === null ? "—" : `${attendancePct}%`}</span>
             </RingProgress>
-            <div style={{ fontSize: 11, color: C.inkSoft }}>Your<br />Attendance</div>
+            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Your Attendance</div>
           </button>
-          <button onClick={() => onNav("library")} className="dvbc-tap" style={{ flex: 1, textAlign: "left", background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 16, cursor: "pointer" }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.accent }}>
-              {(pieces || []).filter((p) => p.is_ready).length}/{(pieces || []).length}
-            </div>
-            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>Pieces Ready</div>
-          </button><button onClick={() => onNav("notation")} className="dvbc-tap" style={{ flex: 1, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, textAlign: "center", cursor: "pointer" }}>
-  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.garnet }}>♪</div>
-  <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>Notation Trainer</div>
-</button>
+          <button onClick={() => onNav("library")} className="dvbc-tap" style={{ flex: 1, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, textAlign: "center", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 96 }}>
+            {(pieces || []).length === 0 ? (
+              <>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.lilac }}>♫</div>
+                <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>No pieces yet</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.accent }}>
+                  {(pieces || []).filter((p) => p.is_ready).length}/{(pieces || []).length}
+                </div>
+                <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Pieces Ready</div>
+              </>
+            )}
+          </button>
+          <button onClick={() => onNav("notation")} className="dvbc-tap" style={{ flex: 1, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, textAlign: "center", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 96 }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.garnet }}>♪</div>
+            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Notation Trainer</div>
+          </button>
         </div>
 
         <UpcomingBirthdays members={members} />
@@ -1295,18 +1305,18 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
           className="dvbc-tap"
           style={{
             display: "flex", alignItems: "center", gap: 10, marginTop: 12, textDecoration: "none",
-            background: "#25D366", color: "#fff", borderRadius: 16, padding: "14px 16px",
+            background: C.garnet, color: "#fff", borderRadius: 16, padding: "14px 16px",
           }}
         >
           <div style={{
-            width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.22)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.14)",
+            border: `1px solid ${C.plum}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
-            <MessageCircle size={17} color="#fff" />
+            <MessageCircle size={17} color={C.plum} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700 }}>Join our WhatsApp Group</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.85)", marginTop: 1 }}>Chat with the chorale outside the app</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 1 }}>Chat with the chorale outside the app</div>
           </div>
         </a>
 
@@ -4490,7 +4500,7 @@ function CommunicationSettings({
 }
 
 const BASE_RENDER_SCALE = 2; // fixed high-res render for crisp strokes/text regardless of zoom
-const ANNOTATION_COLORS = ["#0F1B33", "#1F5FA8", "#2B7A4B", "#111111"];
+const ANNOTATION_COLORS = ["#0B2635", "#1F5FA8", "#2B7A4B", "#111111"];
 
 function AnnotatedPdfPage({ pdfDoc, pageNumber, zoomLevel, drawMode, tool, color, strokeWidth, strokes, onStrokeComplete, onNaturalSize }) {
   const renderCanvasRef = useRef(null);
