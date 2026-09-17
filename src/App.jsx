@@ -36,6 +36,7 @@ const C = {
   roseBg: "#FBEAF1",
   amberBg: "#F6EFD8",
   amberText: "#8A6C24",
+  heroShadow: "0 10px 26px rgba(76,46,158,0.18)",
 };
 
 // A function (not a fixed string) so it always reflects the *current* theme's
@@ -72,25 +73,27 @@ const LIGHT_THEME = {
   roseBg: "#FBEAF1",
   amberBg: "#F6EFD8",
   amberText: "#8A6C24",
+  heroShadow: "0 10px 26px rgba(76,46,158,0.18)",
 };
 const DARK_THEME = {
-  garnet: "#123449",
-  garnetDark: "#050F17",
-  plum: "#14B8A6",
-  accent: "#14B8A6",
-  lilac: "#8FEDE0",
-  lilacSoft: "#1A4258",
-  lilacLine: "#25506A",
-  ink: "#EAF6F3",
-  inkSoft: "#9FC3C8",
-  card: "#123449",
-  parchment: "#0B2635",
+  garnet: "#171F27",
+  garnetDark: "#0B0E11",
+  plum: "#38BDF8",
+  accent: "#38BDF8",
+  lilac: "#7DD3FC",
+  lilacSoft: "#1B2A36",
+  lilacLine: "#26333E",
+  ink: "#F1F5F9",
+  inkSoft: "#94A3B8",
+  card: "#171D24",
+  parchment: "#101418",
   sage: "#5FE0A0",
-  sageBg: "#173325",
+  sageBg: "#132A22",
   roseDeep: "#FF6FA8",
-  roseBg: "#3A1B28",
-  amberBg: "#3A2E14",
+  roseBg: "#2A1620",
+  amberBg: "#2A2213",
   amberText: "#F2C065",
+  heroShadow: "0 0 32px rgba(56,189,248,0.28), 0 12px 32px rgba(0,0,0,0.6)",
 };
 function applyTheme(mode) {
   Object.assign(C, mode === "dark" ? DARK_THEME : LIGHT_THEME);
@@ -1244,7 +1247,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
       <div style={{ padding: "14px 24px 0" }}><Staff /></div>
 
       <div style={{ padding: "18px 24px" }}>
-        <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", boxShadow: "0 10px 26px rgba(76,46,158,0.18)" }}>
+        <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", boxShadow: C.heroShadow }}>
           <HeroCarousel photos={HERO_PHOTOS} height={190} greeting={greeting} displayName={displayName} />
         </div>
 
@@ -1292,7 +1295,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 14, marginTop: 16, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 20, padding: 16, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 14, marginTop: 16, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 20, padding: 16, alignItems: "center", boxShadow: C.heroShadow }}>
           <button onClick={() => onNav("attendance")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
             <RingProgress value={attendancePct ?? 0} size={64} strokeWidth={6} color={C.garnet} track={C.lilacLine}>
               <span style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{attendancePct === null ? "—" : `${attendancePct}%`}</span>
