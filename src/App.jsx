@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Home, CheckSquare, Music2, User, Search, Bell, Play, Pause, LogOut,
   ChevronLeft, Star, Mail, Lock, Eye, EyeOff, Clock, MapPin, AlertCircle, UserPlus, Camera, Users, ListMusic, FileText,
   Repeat, RotateCcw, RotateCw, X, Plus, Minus, Gauge, Download, WifiOff, MessageCircle, Phone, Trash2, Mic, Square,
-  PhoneOff, Video, VideoOff, MicOff } from "lucide-react";
+  PhoneOff, Video, VideoOff, MicOff, Megaphone } from "lucide-react";
 import logoImg from "./assets/logo.jpg";
 import photoImg from "./assets/chorale-photo.jpg";
 import photoImg2 from "./assets/chorale-photo-2.jpg";
@@ -252,9 +252,9 @@ function HeroCarousel({ photos, height = 190, intervalMs = 4500, greeting, displ
       ))}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(0deg, rgba(36,18,70,0.88) 0%, rgba(36,18,70,0.15) 55%, rgba(36,18,70,0) 100%)" }} />
       <div style={{ position: "absolute", left: 18, right: 18, bottom: 16, color: "#fff" }}>
-{greeting && displayName && (
-  <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>{greeting} {displayName}</div>
-)}
+        {greeting && displayName && (
+          <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>{greeting} {displayName}</div>
+        )}
         <div style={{ fontSize: 10.5, letterSpacing: 2, fontWeight: 700, color: C.lilac, textTransform: "uppercase" }}>Our Chorale</div>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 3 }}>Beautiful voices, one family</div>
       </div>
@@ -339,8 +339,7 @@ function Toast({ toast, onClose }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{toast.title}</div>
         <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toast.body}</div>
-     
- </div>
+      </div>
     </div>
   );
 }
@@ -1208,8 +1207,6 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
             <img src={logoImg} alt={CHOIR_NAME} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: C.inkSoft }}>{greeting}</div>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 23, color: C.ink, marginTop: 2 }}>{displayName}</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -1249,7 +1246,6 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
       <div style={{ padding: "18px 24px" }}>
         <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", boxShadow: "0 10px 26px rgba(76,46,158,0.18)" }}>
           <HeroCarousel photos={HERO_PHOTOS} height={190} greeting={greeting} displayName={displayName} />
-
         </div>
 
         {nextEvent ? (
@@ -1292,59 +1288,75 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
         ) : (
           <div style={{ background: gradient(), borderRadius: 20, padding: 20, marginTop: 16, color: "#fff" }}>
             <div style={{ fontSize: 10.5, letterSpacing: 2, fontWeight: 700, color: C.lilac, textTransform: "uppercase" }}>Next Event</div>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 8 }}>Your next rehearsal will show up here</div
-></div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 8 }}>Your next rehearsal will show up here</div>
+          </div>
         )}
 
         <div style={{ display: "flex", gap: 14, marginTop: 16, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 20, padding: 16, alignItems: "center" }}>
-  <button onClick={() => onNav("attendance")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
-    <RingProgress value={attendancePct ?? 0} size={64} strokeWidth={6} color={C.garnet} track={C.lilacLine}>
-      <span style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{attendancePct === null ? "—" : `${attendancePct}%`}</span>
-    </RingProgress>
-  </button>
-  <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 0 }}>
-    <button onClick={() => onNav("library")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%" }}>
-      <div style={{ width: 30, height: 30, borderRadius: 9, background: C.lilacSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.accent, flexShrink: 0 }}>♪</div>
-      <div style={{ minWidth: 0 }}>
-        {(pieces || []).length === 0 ? (
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>No pieces assigned yet</div>
-        ) : (
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{(pieces || []).filter((p) => p.is_ready).length}/{(pieces || []).length} pieces ready</div>
-        )}
-        <div style={{ fontSize: 10.5, color: C.inkSoft }}>Tap to view your library</div>
-      </div>
-    </button>
-    <button onClick={() => onNav("notation")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%" }}>
-      <div style={{ width: 30, height: 30, borderRadius: 9, background: C.lilacSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.garnet, flexShrink: 0 }}>♫</div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>Notation Trainer</div>
-        <div style={{ fontSize: 10.5, color: C.inkSoft }}>Sharpen your sight-reading</div>
-      </div>
-    </button>
-  </div>
-</div>
+          <button onClick={() => onNav("attendance")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
+            <RingProgress value={attendancePct ?? 0} size={64} strokeWidth={6} color={C.garnet} track={C.lilacLine}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{attendancePct === null ? "—" : `${attendancePct}%`}</span>
+            </RingProgress>
+          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 0 }}>
+            <button onClick={() => onNav("library")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%" }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: C.lilacSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.accent, flexShrink: 0 }}>♫</div>
+              <div style={{ minWidth: 0 }}>
+                {(pieces || []).length === 0 ? (
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>No pieces assigned yet</div>
+                ) : (
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{(pieces || []).filter((p) => p.is_ready).length}/{(pieces || []).length} pieces ready</div>
+                )}
+                <div style={{ fontSize: 10.5, color: C.inkSoft }}>Tap to view your library</div>
+              </div>
+            </button>
+            <button onClick={() => onNav("notation")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%" }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: C.lilacSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.garnet, flexShrink: 0 }}>♪</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>Notation Trainer</div>
+                <div style={{ fontSize: 10.5, color: C.inkSoft }}>Sharpen your sight-reading</div>
+              </div>
+            </button>
+          </div>
+        </div>
 
         <UpcomingBirthdays members={members} />
 
-        <a
-          href={WHATSAPP_GROUP_LINK} target="_blank" rel="noopener noreferrer"
-          className="dvbc-tap"
-          style={{
-            display: "flex", alignItems: "center", gap: 10, marginTop: 12, textDecoration: "none",
-            background: C.garnet, color: "#fff", borderRadius: 16, padding: "14px 16px",
-          }}
-        >
-          <div style={{
-            width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.14)",
-            border: `1px solid ${C.plum}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
-            <MessageCircle size={17} color={C.plum} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700 }}>Join our WhatsApp Group</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 1 }}>Chat with the chorale outside the app</div>
-          </div>
-        </a>
+        <div style={{ background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, overflow: "hidden", marginTop: 12 }}>
+          <a
+            href={WHATSAPP_GROUP_LINK} target="_blank" rel="noopener noreferrer"
+            className="dvbc-tap"
+            style={{
+              display: "flex", alignItems: "center", gap: 12, textDecoration: "none",
+              padding: 16,
+            }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%", background: C.lilacSoft,
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <MessageCircle size={16} color={C.plum} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.ink }}>Join the WhatsApp group</div>
+              <div style={{ fontSize: 11.5, color: C.inkSoft, marginTop: 1 }}>Chat with the chorale outside the app</div>
+            </div>
+          </a>
+          {announcements.length === 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderTop: `1px solid ${C.lilacLine}` }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: "50%", background: C.roseBg,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                <Megaphone size={16} color={C.roseDeep} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: C.ink }}>No announcements yet</div>
+                <div style={{ fontSize: 11.5, color: C.inkSoft, marginTop: 1 }}>Your director's updates will land here</div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div ref={announcementsRef} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "22px 0 10px" }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, color: C.ink }}>Announcements</div>
@@ -1387,12 +1399,6 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
                 {posting ? "Posting…" : "Post"}
               </button>
             </div>
-          </div>
-        )}
-        {announcements.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "22px 0 14px", color: C.inkSoft }}>
-            <Bell size={22} color={C.lilac} />
-            <div style={{ fontSize: 12.5 }}>No announcements yet.</div>
           </div>
         )}
         {announcements.map((a) => (
