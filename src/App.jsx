@@ -216,7 +216,7 @@ function RingProgress({ value = 0, size = 64, strokeWidth = 7, color, track, chi
 }
 
 /* ---------- Auto-rotating hero photo carousel ---------- */
-function HeroCarousel({ photos, height = 190, intervalMs = 4500 }) {
+function HeroCarousel({ photos, height = 190, intervalMs = 4500, greeting, displayName }) {
   const [index, setIndex] = useState(0);
   const touchStartX = useRef(null);
   useEffect(() => {
@@ -252,6 +252,9 @@ function HeroCarousel({ photos, height = 190, intervalMs = 4500 }) {
       ))}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(0deg, rgba(36,18,70,0.88) 0%, rgba(36,18,70,0.15) 55%, rgba(36,18,70,0) 100%)" }} />
       <div style={{ position: "absolute", left: 18, right: 18, bottom: 16, color: "#fff" }}>
+{greeting && displayName && (
+  <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>{greeting} {displayName}</div>
+)}
         <div style={{ fontSize: 10.5, letterSpacing: 2, fontWeight: 700, color: C.lilac, textTransform: "uppercase" }}>Our Chorale</div>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 3 }}>Beautiful voices, one family</div>
       </div>
@@ -336,7 +339,8 @@ function Toast({ toast, onClose }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{toast.title}</div>
         <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toast.body}</div>
-      </div>
+     
+ </div>
     </div>
   );
 }
@@ -1244,7 +1248,8 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
 
       <div style={{ padding: "18px 24px" }}>
         <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", boxShadow: "0 10px 26px rgba(76,46,158,0.18)" }}>
-          <HeroCarousel photos={HERO_PHOTOS} height={190} />
+          <HeroCarousel photos={HERO_PHOTOS} height={190} greeting={greeting} displayName={displayName} />
+
         </div>
 
         {nextEvent ? (
@@ -1287,37 +1292,37 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
         ) : (
           <div style={{ background: gradient(), borderRadius: 20, padding: 20, marginTop: 16, color: "#fff" }}>
             <div style={{ fontSize: 10.5, letterSpacing: 2, fontWeight: 700, color: C.lilac, textTransform: "uppercase" }}>Next Event</div>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 8 }}>No upcoming events yet</div>
-          </div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 8 }}>Your next rehearsal will show up here</div
+></div>
         )}
 
-        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-          <button onClick={() => onNav("attendance")} className="dvbc-tap" style={{ flex: 1, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, textAlign: "center", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 96 }}>
-            <RingProgress value={attendancePct ?? 0} size={38} strokeWidth={4.5} color={C.garnet} track={C.lilacLine}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.accent }}>{attendancePct === null ? "—" : `${attendancePct}%`}</span>
-            </RingProgress>
-            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Your Attendance</div>
-          </button>
-          <button onClick={() => onNav("library")} className="dvbc-tap" style={{ flex: 1, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, textAlign: "center", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 96 }}>
-            {(pieces || []).length === 0 ? (
-              <>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.lilac }}>♫</div>
-                <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>No pieces yet</div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.accent }}>
-                  {(pieces || []).filter((p) => p.is_ready).length}/{(pieces || []).length}
-                </div>
-                <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Pieces Ready</div>
-              </>
-            )}
-          </button>
-          <button onClick={() => onNav("notation")} className="dvbc-tap" style={{ flex: 1, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, textAlign: "center", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 96 }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 21, color: C.garnet }}>♪</div>
-            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Notation Trainer</div>
-          </button>
-        </div>
+        <div style={{ display: "flex", gap: 14, marginTop: 16, background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 20, padding: 16, alignItems: "center" }}>
+  <button onClick={() => onNav("attendance")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", flexShrink: 0 }}>
+    <RingProgress value={attendancePct ?? 0} size={64} strokeWidth={6} color={C.garnet} track={C.lilacLine}>
+      <span style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{attendancePct === null ? "—" : `${attendancePct}%`}</span>
+    </RingProgress>
+  </button>
+  <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 0 }}>
+    <button onClick={() => onNav("library")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%" }}>
+      <div style={{ width: 30, height: 30, borderRadius: 9, background: C.lilacSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.accent, flexShrink: 0 }}>♪</div>
+      <div style={{ minWidth: 0 }}>
+        {(pieces || []).length === 0 ? (
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>No pieces assigned yet</div>
+        ) : (
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{(pieces || []).filter((p) => p.is_ready).length}/{(pieces || []).length} pieces ready</div>
+        )}
+        <div style={{ fontSize: 10.5, color: C.inkSoft }}>Tap to view your library</div>
+      </div>
+    </button>
+    <button onClick={() => onNav("notation")} className="dvbc-tap" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%" }}>
+      <div style={{ width: 30, height: 30, borderRadius: 9, background: C.lilacSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: C.garnet, flexShrink: 0 }}>♫</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>Notation Trainer</div>
+        <div style={{ fontSize: 10.5, color: C.inkSoft }}>Sharpen your sight-reading</div>
+      </div>
+    </button>
+  </div>
+</div>
 
         <UpcomingBirthdays members={members} />
 
