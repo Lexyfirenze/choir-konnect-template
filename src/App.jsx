@@ -430,6 +430,26 @@ function getEventPhase(event) {
   return "ongoing";
 }
 
+// Ticks once a second while `active` is true, counting down to `targetIso`.
+// Stays inert (no interval) when inactive, so it's cheap to call unconditionally.
+function useCountdown(targetIso, active) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active || !targetIso) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active, targetIso]);
+  if (!targetIso) return { h: 0, m: 0, s: 0, totalMs: 0 };
+  const target = new Date(targetIso).getTime();
+  const diff = Math.max(0, target - now);
+  return {
+    h: Math.floor(diff / 3600000),
+    m: Math.floor((diff % 3600000) / 60000),
+    s: Math.floor((diff % 60000) / 1000),
+    totalMs: diff,
+  };
+}
+
 // "Today", "Tomorrow", or a short date, for event list headers.
 function formatEventDay(iso) {
   const d = new Date(iso);
@@ -1090,6 +1110,81 @@ function UpcomingBirthdays({ members }) {
   );
 }
 
+// Compact inline audio player for the Home dashboard — plays a single featured
+// practice piece with play/pause and ±10s skip. Reuses getPlayableAudioSrc so
+// downloaded/offline audio behaves the same as it does in the Library screen.
+function HomePracticePlayer({ piece, onNav }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    return () => { audioRef.current?.pause(); };
+  }, []);
+
+  useEffect(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setIsPlaying(false);
+    setProgress(0);
+  }, [piece?.id]);
+
+  const ensureAudio = async () => {
+    if (audioRef.current) return audioRef.current;
+    const src = await getPlayableAudioSrc(piece.audio_url);
+    const audio = new Audio(src);
+    audio.ontimeupdate = () => { if (audio.duration) setProgress(audio.currentTime / audio.duration); };
+    audio.onended = () => { setIsPlaying(false); setProgress(0); };
+    audioRef.current = audio;
+    return audio;
+  };
+
+  const togglePlay = async () => {
+    const audio = await ensureAudio();
+    if (isPlaying) { audio.pause(); setIsPlaying(false); }
+    else { audio.play().catch(() => setIsPlaying(false)); setIsPlaying(true); }
+  };
+
+  const skip = async (seconds) => {
+    const audio = await ensureAudio();
+    audio.currentTime = Math.max(0, audio.currentTime + seconds);
+  };
+
+  if (!piece) return null;
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, marginTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {piece.title}{piece.composer ? ` — ${piece.composer}` : ""}
+          </div>
+          <div style={{ fontSize: 10.5, color: C.inkSoft, marginTop: 1 }}>Practice Track</div>
+        </div>
+        <button onClick={() => skip(-10)} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, display: "flex" }} title="Back 10s">
+          <RotateCcw size={17} />
+        </button>
+        <button
+          onClick={togglePlay} className="dvbc-tap"
+          style={{ width: 34, height: 34, borderRadius: "50%", border: "none", cursor: "pointer", background: gradient(), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+        >
+          {isPlaying ? <Pause size={14} color="#fff" fill="#fff" /> : <Play size={14} color="#fff" fill="#fff" />}
+        </button>
+        <button onClick={() => skip(10)} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, display: "flex" }} title="Forward 10s">
+          <RotateCw size={17} />
+        </button>
+      </div>
+      <div style={{ height: 3, background: C.lilacLine, borderRadius: 999, marginTop: 12, overflow: "hidden" }}>
+        <div style={{ width: `${progress * 100}%`, height: "100%", background: gradient() }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+        <div style={{ fontSize: 10.5, color: C.inkSoft }}>Now Playing: Practice List</div>
+        <button onClick={() => onNav("library")} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 700, color: C.plum, textDecoration: "underline" }}>View Score</button>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitPost, onNav, unreadCount = 0, onCheckIn, checkingIn, checkInError }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning," : hour < 18 ? "Good afternoon," : "Good evening,";
@@ -1142,6 +1237,9 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
     .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
   const nextEvent = upcoming[0] || null;
   const phase = nextEvent ? getEventPhase(nextEvent) : null;
+  const countdownActive = !!(nextEvent && phase === "upcoming" && (new Date(nextEvent.start_time).getTime() - Date.now()) < 24 * 3600000);
+  const countdown = useCountdown(nextEvent?.start_time, countdownActive);
+  const featuredPiece = (pieces || []).find((p) => p.audio_url) || null;
   const checkInOpen = nextEvent ? isEventCheckInOpen(nextEvent) : false;
 
   const [myEventRecord, setMyEventRecord] = useState(null);
@@ -1259,14 +1357,26 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
               backgroundImage: "repeating-linear-gradient(to bottom, transparent 0, transparent 8px, rgba(255,255,255,0.9) 8px, rgba(255,255,255,0.9) 9px)",
             }} />
             <div style={{ position: "relative" }}>
-            <div style={{ position: "absolute", top: 18, right: 18, background: "rgba(255,255,255,0.16)", fontSize: 11, fontWeight: 600, padding: "6px 12px", borderRadius: 999 }}>
-              {phase === "ongoing" ? "Ongoing" : formatEventDay(nextEvent.start_time)}
+            <div style={{ position: "absolute", top: 18, right: 18, display: "flex", alignItems: "center", gap: 6, background: phase === "ongoing" ? "rgba(255,107,107,0.22)" : "rgba(255,255,255,0.16)", fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 999 }}>
+              {phase === "ongoing" && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#FF6B6B", display: "inline-block", animation: "dvbcPulse 1.2s ease-in-out infinite" }} />}
+              {phase === "ongoing" ? "LIVE NOW" : formatEventDay(nextEvent.start_time)}
             </div>
             <div style={{ fontSize: 10.5, letterSpacing: 2, fontWeight: 700, color: C.lilac, textTransform: "uppercase" }}>Next Event</div>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, marginTop: 8 }}>{nextEvent.title}</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
               <Clock size={13} /> {formatEventTimeRange(nextEvent)}
             </div>
+            {countdownActive && (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 2, marginTop: 12, fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginRight: 8 }}>Starts in</span>
+                <span style={{ fontSize: 22, fontWeight: 700 }}>{String(countdown.h).padStart(2, "0")}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, marginRight: 6 }}>h</span>
+                <span style={{ fontSize: 22, fontWeight: 700 }}>{String(countdown.m).padStart(2, "0")}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, marginRight: 6 }}>m</span>
+                <span style={{ fontSize: 22, fontWeight: 700 }}>{String(countdown.s).padStart(2, "0")}</span>
+                <span style={{ fontSize: 11, fontWeight: 500 }}>s</span>
+              </div>
+            )}
             {nextEvent.location && (
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
                 <MapPin size={13} /> {nextEvent.location}
@@ -1322,6 +1432,8 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
             </button>
           </div>
         </div>
+
+        <HomePracticePlayer piece={featuredPiece} onNav={onNav} />
 
         <UpcomingBirthdays members={members} />
 
