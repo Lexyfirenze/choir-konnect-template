@@ -1251,7 +1251,7 @@ function ActivityFeed({ refreshTick = 0 }) {
 // "Tonight's pieces": the setlist of the next event, each with its own play button.
 // Plays one track at a time and moves on to the next piece with audio when one ends.
 // Falls back to the single featured-piece player when the event has no setlist.
-function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick = 0 }) {
+function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick = 0, memberId }) {
   const [rows, setRows] = useState(null);
   const [playingId, setPlayingId] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -1287,6 +1287,30 @@ function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick 
   const currentIdRef = useRef(null);
   const [playError, setPlayError] = useState("");
 
+  // Practice tracking: count a "listen" once a piece has really played for 30 seconds
+  // (seeking ahead doesn't count). Saved to practice_sessions for section leaders.
+  const listenedRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const loggedRef = useRef(false);
+  const memberIdRef = useRef(memberId);
+  memberIdRef.current = memberId;
+  const trackListen = (a) => {
+    const d = a.currentTime - lastTimeRef.current;
+    lastTimeRef.current = a.currentTime;
+    if (d > 0 && d < 1.5) listenedRef.current += d;
+    if (!loggedRef.current && listenedRef.current >= 30 && memberIdRef.current) {
+      loggedRef.current = true;
+      const item = itemsRef.current.find((i) => i.rowId === currentIdRef.current);
+      supabase.from("practice_sessions").insert({
+        member_id: memberIdRef.current,
+        kind: "listen",
+        piece_id: item ? String(item.piece.id) : null,
+        event_id: eventId ? String(eventId) : null,
+        seconds: 30,
+      }).then(() => {});
+    }
+  };
+
   const stop = () => {
     currentIdRef.current = null;
     if (audioRef.current) audioRef.current.pause();
@@ -1302,7 +1326,7 @@ function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick 
     if (audioRef.current) return audioRef.current;
     const a = new Audio();
     a.preload = "auto";
-    a.ontimeupdate = () => { if (Number.isFinite(a.duration) && a.duration > 0) setProgress(a.currentTime / a.duration); };
+    a.ontimeupdate = () => { if (Number.isFinite(a.duration) && a.duration > 0) setProgress(a.currentTime / a.duration); trackListen(a); };
     a.onplay = () => setAudioPlaying(true);
     a.onpause = () => setAudioPlaying(false);
     a.onerror = () => { if (currentIdRef.current !== null) { setPlayError("Couldn't play that track."); setAudioPlaying(false); } };
@@ -1322,6 +1346,9 @@ function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick 
     if (!item || !item.piece.audio_url) return;
     const audio = getAudio();
     currentIdRef.current = rowId;
+    listenedRef.current = 0;
+    lastTimeRef.current = 0;
+    loggedRef.current = false;
     setPlayError("");
     setPlayingId(rowId);
     setProgress(0);
@@ -1670,7 +1697,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
           </div>
         </div>
 
-        <TonightsPieces event={nextEvent} pieces={pieces} fallbackPiece={featuredPiece} onNav={onNav} refreshTick={refreshTick} />
+        <TonightsPieces event={nextEvent} pieces={pieces} fallbackPiece={featuredPiece} onNav={onNav} refreshTick={refreshTick} memberId={profile?.id} />
 
         <UpcomingBirthdays members={members} />
 
@@ -1870,6 +1897,65 @@ function EventSetlist({ eventId, pieces = [], isAdmin, onNav }) {
       {error && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.roseDeep, fontSize: 11.5, marginTop: 10 }}>
           <AlertCircle size={13} /> {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Leaders' view: who has practiced in the last 7 days (from practice_sessions).
+function PracticeActivity({ members = [] }) {
+  const [rows, setRows] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+    supabase.from("practice_sessions").select("member_id, kind, seconds, created_at")
+      .gte("created_at", since)
+      .then(({ data, error }) => { if (active) setRows(error ? [] : (data || [])); });
+    return () => { active = false; };
+  }, []);
+
+  if (rows === null) return null;
+
+  const byMember = new Map();
+  rows.forEach((r) => {
+    const k = String(r.member_id);
+    const cur = byMember.get(k) || { sessions: 0, seconds: 0 };
+    cur.sessions += 1;
+    cur.seconds += r.seconds || 0;
+    byMember.set(k, cur);
+  });
+  const list = members
+    .map((m) => ({ m, stats: byMember.get(String(m.id)) || { sessions: 0, seconds: 0 } }))
+    .sort((a, b) => b.stats.sessions - a.stats.sessions || (a.m.name || "").localeCompare(b.m.name || ""));
+  const practiced = list.filter((x) => x.stats.sessions > 0).length;
+
+  return (
+    <div style={{ margin: "16px 24px 0", background: C.card, border: `1.4px solid ${C.lilacLine}`, borderRadius: 18, padding: 18 }}>
+      <button
+        onClick={() => setOpen((o) => !o)} className="dvbc-tap"
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+      >
+        <Mic size={15} color={C.plum} />
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: C.ink, flex: 1 }}>Practice this week</div>
+        <div style={{ fontSize: 11.5, color: C.inkSoft }}>{practiced} of {list.length} practiced</div>
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {list.length === 0 && <div style={{ fontSize: 11.5, color: C.inkSoft }}>No members yet.</div>}
+          {list.map(({ m, stats }) => (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: `1px solid ${C.lilacLine}` }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</div>
+                <div style={{ fontSize: 10.5, color: C.inkSoft }}>{m.part}</div>
+              </div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: stats.sessions ? C.plum : C.inkSoft }}>
+                {stats.sessions ? `${stats.sessions} session${stats.sessions === 1 ? "" : "s"} · ${Math.max(1, Math.round(stats.seconds / 60))} min` : "None yet"}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -2540,6 +2626,7 @@ function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPres
           </div>
 
           <EventSetlist eventId={selectedEvent.id} pieces={pieces} isAdmin={isAdmin} onNav={onNav} />
+          {isAdmin && <PracticeActivity members={members} />}
 
           {!selectedEvent.track_attendance ? (
             <div style={{ margin: "16px 24px 0", fontSize: 11.5, color: C.inkSoft, textAlign: "center" }}>
