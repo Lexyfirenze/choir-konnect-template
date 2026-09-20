@@ -2902,13 +2902,15 @@ function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPres
   );
 }
 
-function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio }) {
+function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNotation }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [composer, setComposer] = useState(initial?.composer || "");
   const [tag, setTag] = useState(initial?.tag || "SATB");
   const [part, setPart] = useState(initial?.part || "All");
   const [existingAudioUrl, setExistingAudioUrl] = useState(initial?.audio_url || "");
   const [audioFile, setAudioFile] = useState(null);
+  const [existingNotationUrl, setExistingNotationUrl] = useState(initial?.notation_xml_url || "");
+  const [notationFile, setNotationFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -2929,7 +2931,13 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio }) {
         if (uploadErr) throw new Error(uploadErr);
         audio_url = url;
       }
-      const payload = { title: title.trim(), composer: composer.trim() || null, tag, part, audio_url };
+      let notation_xml_url = existingNotationUrl || null;
+      if (notationFile) {
+        const { url, error: notationErr } = await onUploadNotation(notationFile);
+        if (notationErr) throw new Error(notationErr);
+        notation_xml_url = url;
+      }
+      const payload = { title: title.trim(), composer: composer.trim() || null, tag, part, audio_url, notation_xml_url };
       const { error: saveErr } = initial ? await onSave.update(initial.id, payload) : await onSave.create(payload);
       if (saveErr) throw new Error(saveErr);
       onCancel();
@@ -2979,6 +2987,24 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio }) {
           <div style={{ fontSize: 11, color: C.sage, marginTop: 6 }}>Audio already attached — choose a file above to replace it.</div>
         )}
       </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Notation (MusicXML — .musicxml, .xml or .mxl, up to 10MB)</label>
+        <input type="file" accept=".xml,.musicxml,.mxl" onChange={(e) => setNotationFile(e.target.files?.[0] || null)} style={{ fontSize: 12.5, color: C.inkSoft }} />
+        {existingNotationUrl && !notationFile && (
+          <div style={{ fontSize: 11, color: C.sage, marginTop: 6 }}>
+            Notation already attached — choose a file above to replace it.{" "}
+            <button
+              type="button" onClick={() => setExistingNotationUrl("")} className="dvbc-tap"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: C.roseDeep, fontSize: 11, fontWeight: 700, textDecoration: "underline" }}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+        {!existingNotationUrl && !notationFile && initial?.notation_xml_url && (
+          <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 6 }}>Notation will be removed when you save.</div>
+        )}
+      </div>
       {error && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.roseDeep, fontSize: 11.5, marginBottom: 12 }}>
           <AlertCircle size={13} /> {error}
@@ -3002,7 +3028,7 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio }) {
   );
 }
 
-function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate, onUpdate, onDelete, onUploadAudio }) {
+function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate, onUpdate, onDelete, onUploadAudio, onUploadNotation, myPart }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const parts = ["All", "Soprano", "Alto", "Tenor", "Bass"];
@@ -3013,6 +3039,7 @@ function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate
   const [rowError, setRowError] = useState("");
   const [downloadedIds, setDownloadedIds] = useState(new Set());
   const [downloadBusyId, setDownloadBusyId] = useState(null);
+  const [scorePiece, setScorePiece] = useState(null); // piece whose score is open in the sheet
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -3097,6 +3124,7 @@ function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate
           onCancel={() => { setShowForm(false); setEditingPiece(null); }}
           onSave={{ create: onCreate, update: onUpdate }}
           onUploadAudio={onUploadAudio}
+          onUploadNotation={onUploadNotation}
         />
       )}
 
@@ -3168,6 +3196,15 @@ function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate
                     <CheckSquare size={11} /> Ready
                   </div>
                 ) : null}
+                {p.notation_xml_url && (
+                  <button
+                    onClick={() => setScorePiece(p)} className="dvbc-tap"
+                    style={{ width: 30, height: 30, borderRadius: "50%", border: `1.4px solid ${C.lilacLine}`, background: C.card, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    title="View score and solfa" aria-label="View score and solfa"
+                  >
+                    <FileText size={13} color={C.plum} />
+                  </button>
+                )}
                 {p.audio_url && (
                   <OfflineToggle
                     downloaded={downloadedIds.has(p.id)} busy={downloadBusyId === p.id}
@@ -3191,6 +3228,32 @@ function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate
           );
         })}
       </div>
+
+      {scorePiece && (
+        <div
+          onClick={() => setScorePiece(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.parchment, width: "100%", maxWidth: 760, maxHeight: "92vh", overflowY: "auto", borderRadius: "20px 20px 0 0", paddingBottom: 28 }}
+          >
+            <div style={{ position: "sticky", top: 0, zIndex: 1, background: C.parchment, display: "flex", alignItems: "center", gap: 10, padding: "16px 24px 8px" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scorePiece.title}</div>
+                {scorePiece.composer && <div style={{ fontSize: 11, color: C.inkSoft }}>{scorePiece.composer}</div>}
+              </div>
+              <button
+                onClick={() => setScorePiece(null)} className="dvbc-tap" aria-label="Close score"
+                style={{ background: C.card, border: `1.4px solid ${C.lilacLine}`, borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <X size={15} color={C.inkSoft} />
+              </button>
+            </div>
+            <ScoreReader C={C} gradient={gradient} myPart={myPart} initialUrl={scorePiece.notation_xml_url} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -8742,6 +8805,18 @@ export default function App() {
     return { url: data.publicUrl };
   }, [profile]);
 
+  const uploadLibraryNotation = useCallback(async (file) => {
+    if (!profile) return { error: "Not signed in" };
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    if (!["xml", "musicxml", "mxl"].includes(ext)) return { error: "Please choose a MusicXML file (.musicxml, .xml or .mxl)." };
+    if (file.size > 10 * 1024 * 1024) return { error: "Notation file must be under 10MB." };
+    const path = `${profile.id}/${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("library-notation").upload(path, file);
+    if (uploadError) return { error: uploadError.message };
+    const { data } = supabase.storage.from("library-notation").getPublicUrl(path);
+    return { url: data.publicUrl };
+  }, [profile]);
+
   const createLibraryPiece = useCallback(async (payload) => {
     if (!profile) return { error: "Not signed in" };
     const { error } = await supabase.from("library_pieces").insert({ ...payload, created_by: profile.id });
@@ -8954,7 +9029,7 @@ export default function App() {
       favorites={favorites} toggleFavorite={toggleFavorite} isAdmin={isAdmin}
       pieces={libraryPieces} loading={loadingLibrary}
       onCreate={createLibraryPiece} onUpdate={updateLibraryPiece} onDelete={deleteLibraryPiece}
-      onUploadAudio={uploadLibraryAudio}
+      onUploadAudio={uploadLibraryAudio} onUploadNotation={uploadLibraryNotation} myPart={profile?.part}
     />
   );
   else if (screen === "messages") content = (

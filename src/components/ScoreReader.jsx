@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Upload } from "lucide-react";
-import { parseMusicXml, readScoreFile, ScorePlayer, sampleScoreXml, guessMyTrackId } from "../lib/scoreEngine";
+import { parseMusicXml, readScoreFile, readScoreUrl, ScorePlayer, sampleScoreXml, guessMyTrackId, buildSolfa } from "../lib/scoreEngine";
 
 const fmtTime = (s) => {
   const t = Math.max(0, Math.round(s));
@@ -11,7 +11,7 @@ const RATES = [0.5, 0.75, 1, 1.25];
 
 // Score reader: opens a MusicXML file, draws the sheet music (OpenSheetMusicDisplay),
 // and plays it back with a part selector so a singer can hear their own line louder.
-export default function ScoreReader({ C, gradient, myPart }) {
+export default function ScoreReader({ C, gradient, myPart, initialUrl, initialView }) {
   const [score, setScore] = useState(null);
   const [xml, setXml] = useState("");
   const [error, setError] = useState("");
@@ -24,6 +24,9 @@ export default function ScoreReader({ C, gradient, myPart }) {
   const [rate, setRate] = useState(1);
   const [fromBar, setFromBar] = useState("");
   const [zoom, setZoom] = useState(0.8);
+  const [view, setView] = useState(initialView || "staff"); // staff | solfa
+  const [barsPerLine, setBarsPerLine] = useState(() => (typeof window !== "undefined" && window.innerWidth < 560 ? 2 : 4));
+  const [copied, setCopied] = useState(false);
 
   const containerRef = useRef(null);
   const osmdRef = useRef(null);
@@ -64,6 +67,19 @@ export default function ScoreReader({ C, gradient, myPart }) {
       setBusy(false);
     }
   };
+
+  // When opened for a stored score (e.g. from the Library), load it straight away.
+  useEffect(() => {
+    if (!initialUrl) return undefined;
+    let cancelled = false;
+    setBusy(true);
+    setError("");
+    readScoreUrl(initialUrl)
+      .then((text) => { if (!cancelled) loadText(text); })
+      .catch((e) => { if (!cancelled) setError(e.message || "Could not open that score."); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [initialUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- audio player lifecycle ---------- */
   useEffect(() => {
@@ -219,6 +235,26 @@ export default function ScoreReader({ C, gradient, myPart }) {
     if (m) seekTo(m.sec);
   };
 
+  /* ---------- solfa ---------- */
+  const solfa = useMemo(() => (score ? buildSolfa(score, barsPerLine) : null), [score, barsPerLine]);
+  let curBar = -1;
+  if (score && (playing || pos > 0)) {
+    for (let i = 0; i < score.measures.length; i++) {
+      if (score.measures[i].sec <= pos + 0.01) curBar = i; else break;
+    }
+  }
+  const showSolfa = view === "solfa" || sheetStatus === "error";
+  const solfaFont = Math.min(20, Math.max(9, Math.round((12 * zoom) / 0.8)));
+
+  const copySolfa = async () => {
+    if (!solfa) return;
+    try {
+      await navigator.clipboard.writeText(`${score.title}\n\n${solfa.plain}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard blocked */ }
+  };
+
   /* ---------- styles ---------- */
   const card = { background: C.card, border: `1.4px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, marginBottom: 12 };
   const chip = (active) => ({
@@ -232,13 +268,16 @@ export default function ScoreReader({ C, gradient, myPart }) {
       {/* Open a file */}
       <div style={card}>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: C.ink, marginBottom: 4 }}>
-          {score ? score.title : "Score reader"}
+          {score ? score.title : initialUrl ? "Score" : "Score reader"}
         </div>
         <div style={{ fontSize: 11.5, color: C.inkSoft, lineHeight: 1.5, marginBottom: 10 }}>
           {score
             ? `${score.tracks.length} part${score.tracks.length === 1 ? "" : "s"} · ${score.measures.length} bars`
+            : initialUrl ? ""
             : "Open a MusicXML file (.musicxml, .xml or .mxl) exported from MuseScore, Finale or Sibelius. Pick your part to hear it louder."}
         </div>
+        {initialUrl && busy && <div style={{ fontSize: 12, color: C.inkSoft }}>Loading score…</div>}
+        {!initialUrl && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <label
             className="dvbc-tap"
@@ -254,6 +293,7 @@ export default function ScoreReader({ C, gradient, myPart }) {
             Try a sample
           </button>
         </div>
+        )}
         {error && <div style={{ color: C.roseDeep, fontSize: 11.5, marginTop: 10 }}>{error}</div>}
       </div>
 
@@ -329,26 +369,71 @@ export default function ScoreReader({ C, gradient, myPart }) {
             </div>
           </div>
 
-          {/* Sheet music */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={smallLabel}>Score</div>
+          {/* Sheet music / solfa */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setView("staff")} className="dvbc-tap" style={{ ...chip(!showSolfa), padding: "6px 12px" }}>Staff</button>
+              <button onClick={() => setView("solfa")} className="dvbc-tap" style={{ ...chip(showSolfa), padding: "6px 12px" }}>Solfa</button>
+            </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => changeZoom(zoom - 0.15)} className="dvbc-tap" style={{ ...chip(false), padding: "4px 10px" }} aria-label="Smaller">A−</button>
               <button onClick={() => changeZoom(zoom + 0.15)} className="dvbc-tap" style={{ ...chip(false), padding: "4px 10px" }} aria-label="Larger">A+</button>
             </div>
           </div>
-          {sheetStatus === "loading" && <div style={{ fontSize: 11.5, color: C.inkSoft, marginBottom: 8 }}>Drawing the score…</div>}
+          {sheetStatus === "loading" && !showSolfa && <div style={{ fontSize: 11.5, color: C.inkSoft, marginBottom: 8 }}>Drawing the score…</div>}
           {sheetStatus === "error" && (
             <div style={{ fontSize: 11.5, color: C.roseDeep, marginBottom: 8 }}>
-              Couldn't draw this score, but you can still play it.
+              Couldn't draw the staff notation, so the solfa is shown instead. You can still play the score.
             </div>
           )}
+
           <div
             ref={containerRef}
-            style={{ background: "#fff", borderRadius: 14, border: `1.4px solid ${C.lilacLine}`, height: 380, overflow: "auto", display: sheetStatus === "error" ? "none" : "block" }}
+            style={{ background: "#fff", borderRadius: 14, border: `1.4px solid ${C.lilacLine}`, height: 380, overflow: "auto", display: showSolfa ? "none" : "block" }}
           />
+
+          {showSolfa && solfa && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11.5, color: C.inkSoft }}>Bars per line:</span>
+                {[1, 2, 3, 4].map((n) => (
+                  <button key={n} onClick={() => setBarsPerLine(n)} className="dvbc-tap" style={{ ...chip(barsPerLine === n), padding: "5px 11px" }}>{n}</button>
+                ))}
+                <button onClick={copySolfa} className="dvbc-tap" style={{ ...chip(false), padding: "5px 12px", marginLeft: "auto" }}>{copied ? "Copied" : "Copy text"}</button>
+              </div>
+              <div
+                style={{
+                  background: "#fff", color: "#111", borderRadius: 14, border: `1.4px solid ${C.lilacLine}`, padding: "12px 14px",
+                  maxHeight: 460, overflow: "auto", fontFamily: "'Courier New', ui-monospace, Menlo, monospace", fontSize: solfaFont, lineHeight: 1.55,
+                }}
+              >
+                {solfa.systems.map((sys) => (
+                  <div key={sys.startNum + "-" + sys.lines[0].bars[0].idx} style={{ marginBottom: 16 }}>
+                    <div style={{ fontFamily: "system-ui, sans-serif", fontSize: Math.max(9, solfaFont - 2), color: "#777", marginBottom: 2 }}>
+                      Bar {sys.startNum} · {sys.keyLabel}
+                    </div>
+                    {sys.lines.map((ln, li) => (
+                      <div key={li} style={{ whiteSpace: "pre" }}>
+                        <span style={{ fontWeight: 700 }}>{ln.label} </span>
+                        {ln.bars.map((b) => (
+                          <React.Fragment key={b.idx}>
+                            <span>| </span>
+                            <span style={{ background: b.idx === curBar ? "#FFE9A8" : "transparent" }}>{b.text}</span>
+                            <span> </span>
+                          </React.Fragment>
+                        ))}
+                        <span>{ln.last ? "||" : "|"}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           <div style={{ fontSize: 10.5, color: C.inkSoft, marginTop: 8, lineHeight: 1.5 }}>
             Playback uses a simple choir-style synth and plays repeats once.
+            {showSolfa ? " Solfa is worked out from the key signature (movable doh); a small mark above or below a letter shows the octave." : ""}
           </div>
         </>
       )}

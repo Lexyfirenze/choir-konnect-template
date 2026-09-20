@@ -43,11 +43,22 @@ export async function readMxl(buffer) {
   return decodeXmlBytes(await entry.async("uint8array"));
 }
 
-export async function readScoreFile(file) {
-  const buffer = await file.arrayBuffer();
+// Turn raw file bytes (plain XML or a zipped .mxl) into MusicXML text.
+export async function readScoreBuffer(buffer) {
   const head = new Uint8Array(buffer.slice(0, 2));
   const isZip = head[0] === 0x50 && head[1] === 0x4b; // "PK"
   return isZip ? readMxl(buffer) : decodeXmlBytes(buffer);
+}
+
+export async function readScoreFile(file) {
+  return readScoreBuffer(await file.arrayBuffer());
+}
+
+// Load a score stored online (e.g. attached to a Library piece).
+export async function readScoreUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Couldn't download that score.");
+  return readScoreBuffer(await res.arrayBuffer());
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +96,8 @@ export function parseMusicXml(xmlText) {
     const partName = partNames[part.getAttribute("id")] || `Part ${pi + 1}`;
     let divisions = 1;
     let transpose = 0;
+    let curKey = { fifths: 0, mode: "major" };
+    let curTime = { beats: 4, beatType: 4 };
     let pos = 0;      // current position in quarter-note beats
     let maxPos = 0;
     let lastStart = 0;
@@ -92,10 +105,12 @@ export function parseMusicXml(xmlText) {
     const tied = new Map();
 
     kids(part).filter((c) => c.tagName === "measure").forEach((measure, mi) => {
+      let mark = null;
       if (pi === 0) {
         const raw = measure.getAttribute("number");
         const n = parseInt(raw, 10);
-        measureMarks.push({ num: Number.isFinite(n) ? n : mi + 1, beat: pos });
+        mark = { num: Number.isFinite(n) ? n : mi + 1, beat: pos, key: { ...curKey }, time: { ...curTime } };
+        measureMarks.push(mark);
       }
       kids(measure).forEach((el) => {
         const tag = el.tagName;
@@ -108,6 +123,19 @@ export function parseMusicXml(xmlText) {
             const oct = parseFloat(kidText(tr, "octave-change")) || 0;
             transpose = chroma + 12 * oct;
           }
+          const keyEl = kid(el, "key");
+          if (keyEl) {
+            const f = parseInt(kidText(keyEl, "fifths"), 10);
+            if (Number.isFinite(f)) curKey = { fifths: f, mode: (kidText(keyEl, "mode") || "major").toLowerCase() };
+          }
+          const timeEl = kid(el, "time");
+          if (timeEl) {
+            const b = parseInt(kidText(timeEl, "beats"), 10);
+            const bt = parseInt(kidText(timeEl, "beat-type"), 10);
+            if (b > 0 && bt > 0) curTime = { beats: b, beatType: bt };
+            else if (timeEl.getAttribute("symbol") === "cut") curTime = { beats: 2, beatType: 2 };
+          }
+          if (mark) { mark.key = { ...curKey }; mark.time = { ...curTime }; }
         } else if (tag === "note") {
           if (kid(el, "grace")) return;
           const dur = (parseFloat(kidText(el, "duration")) || 0) / divisions;
@@ -132,7 +160,7 @@ export function parseMusicXml(xmlText) {
                 open.end = start + dur;
                 if (!tieStart) tied.delete(key);
               } else {
-                const ev = { start, d: dur, end: start + dur, midi, voice };
+                const ev = { start, d: dur, end: start + dur, midi, voice, alter };
                 events.push(ev);
                 if (tieStart) tied.set(key, ev); else tied.delete(key);
               }
@@ -220,9 +248,25 @@ export function parseMusicXml(xmlText) {
   });
   events.sort((x, y) => x.t - y.t);
 
+  const solfa = {
+    measures: measureMarks.map((m, i) => ({
+      num: m.num,
+      start: m.beat,
+      end: i + 1 < measureMarks.length ? measureMarks[i + 1].beat : maxBeat,
+      key: m.key,
+      time: m.time,
+    })),
+    tracks: rawTracks.map((t, i) => ({
+      id: String(i),
+      name: t.name,
+      events: t.events.map((e) => ({ start: e.start, end: e.end, midi: e.midi, alter: e.alter })),
+    })),
+  };
+
   return {
     title,
     tracks,
+    solfa,
     events,
     totalSec: beatToSec(maxBeat),
     baseTempo,
@@ -456,4 +500,143 @@ export function sampleScoreXml() {
     return `<part id="P${i + 1}">${measures}</part>`;
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1"><work><work-title>Sample chorale</work-title></work><part-list>${partList}</part-list>${parts}</score-partwise>`;
+}
+
+
+// ---------------------------------------------------------------------------
+// Tonic sol-fa (movable doh): converts the parsed score to a stacked solfa sheet.
+// ---------------------------------------------------------------------------
+
+const SOLFA_NATURAL = { 0: "d", 2: "r", 4: "m", 5: "f", 7: "s", 9: "l", 11: "t" };
+const SOLFA_SHARP = { 1: "di", 3: "ri", 6: "fi", 8: "si", 10: "li" };
+const SOLFA_FLAT = { 1: "ra", 3: "ma", 6: "se", 8: "le", 10: "te" };
+const SUP = ["", "¹", "²", "³", "⁴"];
+const SUB = ["", "₁", "₂", "₃", "₄"];
+const MAJOR_NAMES = { "-7": "C♭", "-6": "G♭", "-5": "D♭", "-4": "A♭", "-3": "E♭", "-2": "B♭", "-1": "F", 0: "C", 1: "G", 2: "D", 3: "A", 4: "E", 5: "B", 6: "F♯", 7: "C♯" };
+const MINOR_NAMES = { "-7": "A♭", "-6": "E♭", "-5": "B♭", "-4": "F", "-3": "C", "-2": "G", "-1": "D", 0: "A", 1: "E", 2: "B", 3: "F♯", 4: "C♯", 5: "G♯", 6: "D♯", 7: "A♯" };
+
+const mod12 = (n) => ((n % 12) + 12) % 12;
+
+function keyInfo(key) {
+  const f = Math.max(-7, Math.min(7, key.fifths || 0));
+  const dohPc = mod12(f * 7);
+  // the doh nearest to middle C (ties go lower): its octave is the unmarked one
+  const lower = 60 - mod12(60 - dohPc);
+  const base = 60 - lower <= lower + 12 - 60 ? lower : lower + 12;
+  const minor = key.mode === "minor";
+  return { dohPc, base, label: `Doh is ${MAJOR_NAMES[f]}${minor ? ` · Lah is ${MINOR_NAMES[f]}` : ""}` };
+}
+
+function toSolfa(e, info) {
+  const off = mod12(e.midi - info.dohPc);
+  const name = SOLFA_NATURAL[off] || (e.alter > 0 ? SOLFA_SHARP[off] : SOLFA_FLAT[off]);
+  const oct = Math.floor((e.midi - info.base) / 12);
+  return name + (oct > 0 ? SUP[Math.min(oct, 4)] : oct < 0 ? SUB[Math.min(-oct, 4)] : "");
+}
+
+function shortLabel(name) {
+  const split = name.match(/^(.*) · voice (\d+)$/);
+  if (split) return split[1].slice(0, 3) + split[2];
+  const lower = name.trim().toLowerCase();
+  const num = name.match(/\s(\d)\s*$/);
+  const base = /^sop/.test(lower) ? "S" : /^(alt|con)/.test(lower) ? "A" : /^ten/.test(lower) ? "T" : /^bas/.test(lower) ? "B" : null;
+  return base ? base + (num ? num[1] : "") : name.trim().slice(0, 4);
+}
+
+const GRIDS = [1, 2, 3, 4, 6, 8, 12, 16];
+
+export function buildSolfa(score, barsPerLine = 4) {
+  const sf = score && score.solfa;
+  if (!sf || !sf.measures.length) return { systems: [], plain: "" };
+  const { measures, tracks } = sf;
+  const labels = tracks.map((t) => shortLabel(t.name));
+  const labelW = Math.max(...labels.map((l) => l.length));
+  const eps = 1e-3;
+
+  const built = measures.map((m, mi) => {
+    const { beats, beatType } = m.time;
+    const compound = beatType === 8 && beats >= 6 && beats % 3 === 0;
+    const P = compound ? 1.5 : 4 / beatType;
+    const full = (beats * 4) / beatType;
+    const L = m.end - m.start;
+    const pickup = mi === 0 && L < full - eps;
+    const vStart = pickup ? m.end - full : m.start;
+    const nP = pickup ? Math.max(1, Math.round(full / P)) : Math.max(1, Math.ceil((L - eps) / P));
+    const info = keyInfo(m.key);
+    const evs = tracks.map((t) => t.events.filter((e) => e.end > m.start + eps && e.start < m.end - eps));
+    const cells = tracks.map(() => []);
+
+    for (let p = 0; p < nP; p++) {
+      const ps = vStart + p * P;
+      let d = 16;
+      for (const cand of GRIDS) {
+        const unit = P / cand;
+        let ok = true;
+        for (let ti = 0; ti < evs.length && ok; ti++) {
+          for (const e of evs[ti]) {
+            for (const tt of [e.start, e.end]) {
+              if (tt <= ps - eps || tt >= ps + P + eps) continue;
+              const k = (tt - ps) / unit;
+              if (Math.abs(k - Math.round(k)) > 0.02) { ok = false; break; }
+            }
+            if (!ok) break;
+          }
+        }
+        if (ok) { d = cand; break; }
+      }
+      tracks.forEach((t, ti) => {
+        const toks = [];
+        for (let i = 0; i < d; i++) {
+          const at = ps + (i * P) / d;
+          let best = null;
+          for (const e of evs[ti]) {
+            if (e.start <= at + eps && e.end > at + eps && (!best || e.midi > best.midi)) best = e;
+          }
+          toks.push(best ? (Math.abs(best.start - at) < eps ? toSolfa(best, info) : "-") : "");
+        }
+        let str = "";
+        toks.forEach((tok, i) => {
+          if (i > 0) str += d === 3 ? "." : i === d / 2 ? "." : ",";
+          str += tok;
+        });
+        cells[ti].push(toks.every((x) => x === "") ? "" : str);
+      });
+    }
+
+    const widths = [];
+    for (let p = 0; p < nP; p++) widths.push(Math.max(...cells.map((c) => c[p].length)));
+    const texts = cells.map((c) => {
+      let out = "";
+      c.forEach((cell, p) => {
+        if (p > 0) out += ` ${nP === 4 && p === 2 ? "!" : ":"} `;
+        out += cell.padEnd(widths[p]);
+      });
+      return out;
+    });
+    return { idx: mi, num: m.num, key: m.key, keyLabel: info.label, texts };
+  });
+
+  const systems = [];
+  for (let s = 0; s < built.length; s += barsPerLine) {
+    const bars = built.slice(s, s + barsPerLine);
+    const changes = bars.slice(1).filter((b, i) => b.keyLabel !== bars[i].keyLabel);
+    const keyLabel = bars[0].keyLabel + changes.map((b) => `  → bar ${b.num}: ${b.keyLabel}`).join("");
+    systems.push({
+      startNum: bars[0].num,
+      keyLabel,
+      lines: tracks.map((t, ti) => ({
+        label: labels[ti].padEnd(labelW),
+        last: s + barsPerLine >= built.length,
+        bars: bars.map((b) => ({ idx: b.idx, text: b.texts[ti] })),
+      })),
+    });
+  }
+
+  const plain = systems.map((sys) => {
+    const head = `Bar ${sys.startNum} — ${sys.keyLabel}`;
+    const rows = sys.lines.map((ln) => `${ln.label} ${ln.bars.map((b) => `| ${b.text} `).join("")}${ln.last ? "||" : "|"}`);
+    return [head, ...rows].join("\n");
+  }).join("\n\n");
+
+  return { systems, plain };
 }
