@@ -11,6 +11,7 @@ import photoImg3 from "./assets/chorale-photo-3.jpg";
 import { supabase } from "./supabaseClient";
 import { CHOIR_NAME, CHOIR_NAME_SHORT, CHOIR_COUNTRY, WHATSAPP_GROUP_LINK, VAPID_PUBLIC_KEY, PRIVACY_POLICY_TEXT, ABOUT_TEXT } from "./config";import StaffRenderer from "./components/StaffRenderer";import NotationFlashcards from "./components/NotationFlashcards";import RhythmGame from "./components/RhythmGame";
 import SolfegeSinger from "./components/SolfegeSinger";
+import ScoreReader from "./components/ScoreReader";
 import { generateICS, downloadICS } from './utils/dvbc-ics-export.js';
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -6455,12 +6456,12 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
     <div style={{ paddingBottom: 110 }}>
       <TopHeader title="Practice Lists" subtitle="Personal & group playlists" />
 
-      <div style={{ padding: "16px 24px 0", display: "flex", gap: 8 }}>
-        {[["lists", "Lists"], ["assignments", "Assignments"], ["solfege", "Solfège"], ["rhythm", "Rhythm"], ["tools", "Keyboard"]].map(([key, label]) => (
+      <div style={{ padding: "16px 24px 0", display: "flex", gap: 8, overflowX: "auto" }}>
+        {[["lists", "Lists"], ["assignments", "Assignments"], ["solfege", "Solfège"], ["rhythm", "Rhythm"], ["tools", "Keyboard"], ["score", "Scores"]].map(([key, label]) => (
           <button
             key={key} onClick={() => setView(key)} className="dvbc-tap"
             style={{
-              flex: 1, border: "none", cursor: "pointer", borderRadius: 12, padding: "10px 0",
+              flex: "1 0 auto", border: "none", cursor: "pointer", borderRadius: 12, padding: "10px 14px",
               fontSize: 12.5, fontWeight: 700, position: "relative",
               background: view === key ? gradient() : C.lilacSoft,
               color: view === key ? "#fff" : C.inkSoft,
@@ -6896,6 +6897,8 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
       {view === "rhythm" && <RhythmGame onBack={() => setView("lists")} />}
 
       {view === "tools" && <PracticeTools />}
+
+      {view === "score" && <ScoreReader C={C} gradient={gradient} myPart={profile?.part} />}
     </div>
   );
 }
