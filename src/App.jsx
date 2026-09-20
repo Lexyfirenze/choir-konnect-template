@@ -1185,6 +1185,243 @@ function HomePracticePlayer({ piece, onNav }) {
   );
 }
 
+// Recent activity feed — reads the server-side activity_log table (filled by
+// database triggers on posts / library_pieces / events) and stays live via realtime.
+function ActivityFeed({ refreshTick = 0 }) {
+  const [items, setItems] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("id, kind, title, created_at")
+        .order("created_at", { ascending: false })
+        .limit(15);
+      if (!active) return;
+      if (error) { setFailed(true); return; }
+      setFailed(false);
+      setItems((data || []).filter((r) => r.created_at && !Number.isNaN(new Date(r.created_at).getTime())));
+    };
+    load();
+    const channel = supabase
+      .channel("activity-log-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_log" }, () => load())
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [refreshTick]);
+
+  if (failed || items === null || items.length === 0) return null;
+
+  const META = {
+    post:  { Icon: MessageCircle, bg: C.lilacSoft, fg: C.plum,     label: "New announcement" },
+    piece: { Icon: Music2,        bg: C.roseBg,    fg: C.roseDeep, label: "New piece added" },
+    event: { Icon: Clock,         bg: C.lilacSoft, fg: C.plum,     label: "New event" },
+  };
+
+  return (
+    <div>
+      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, color: C.ink, margin: "22px 0 10px" }}>
+        Recent activity
+      </div>
+      {items.map((it) => {
+        const m = META[it.kind] || META.post;
+        const Icon = m.Icon;
+        const title = it.title && it.title.trim() ? it.title : m.label;
+        return (
+          <div key={it.id} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.lilacLine}`, alignItems: "center" }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%", background: m.bg, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Icon size={15} color={m.fg} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
+              <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>{m.label} · {timeAgo(it.created_at)}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// "Tonight's pieces": the setlist of the next event, each with its own play button.
+// Plays one track at a time and moves on to the next piece with audio when one ends.
+// Falls back to the single featured-piece player when the event has no setlist.
+function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick = 0 }) {
+  const [rows, setRows] = useState(null);
+  const [playingId, setPlayingId] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioRef = useRef(null);
+  const itemsRef = useRef([]);
+  const eventId = event?.id;
+
+  useEffect(() => {
+    if (!eventId) { setRows([]); return undefined; }
+    let active = true;
+    setRows(null);
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("event_pieces").select("id, piece_id, position")
+        .eq("event_id", eventId).order("position");
+      if (!active) return;
+      setRows(error ? [] : (data || []));
+    };
+    load();
+    const channel = supabase
+      .channel(`home-setlist-${eventId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "event_pieces", filter: `event_id=eq.${eventId}` }, () => load())
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [eventId, refreshTick]);
+
+  const items = (rows || [])
+    .map((r) => ({ rowId: r.id, piece: pieces.find((pc) => String(pc.id) === String(r.piece_id)) }))
+    .filter((r) => r.piece);
+  itemsRef.current = items;
+
+  const currentIdRef = useRef(null);
+  const [playError, setPlayError] = useState("");
+
+  const stop = () => {
+    currentIdRef.current = null;
+    if (audioRef.current) audioRef.current.pause();
+    setPlayingId(null);
+    setProgress(0);
+    setAudioPlaying(false);
+  };
+
+  // One shared <audio> element for the whole setlist. Reusing it (instead of creating a
+  // new Audio per piece) is what lets the next track start by itself, including on phones
+  // where browsers block audio that wasn't started from a tap.
+  const getAudio = () => {
+    if (audioRef.current) return audioRef.current;
+    const a = new Audio();
+    a.preload = "auto";
+    a.ontimeupdate = () => { if (Number.isFinite(a.duration) && a.duration > 0) setProgress(a.currentTime / a.duration); };
+    a.onplay = () => setAudioPlaying(true);
+    a.onpause = () => setAudioPlaying(false);
+    a.onerror = () => { if (currentIdRef.current !== null) { setPlayError("Couldn't play that track."); setAudioPlaying(false); } };
+    a.onended = () => {
+      const list = itemsRef.current;
+      const idx = list.findIndex((i) => i.rowId === currentIdRef.current);
+      const next = idx >= 0 ? list.slice(idx + 1).find((i) => i.piece.audio_url) : null;
+      if (next) playItemRef.current(next.rowId); else stop();
+    };
+    audioRef.current = a;
+    return a;
+  };
+
+  const playItemRef = useRef(() => {});
+  const playItem = async (rowId) => {
+    const item = itemsRef.current.find((i) => i.rowId === rowId);
+    if (!item || !item.piece.audio_url) return;
+    const audio = getAudio();
+    currentIdRef.current = rowId;
+    setPlayError("");
+    setPlayingId(rowId);
+    setProgress(0);
+    try {
+      const src = await getPlayableAudioSrc(item.piece.audio_url);
+      if (currentIdRef.current !== rowId) return; // user picked something else meanwhile
+      audio.src = src;
+      await audio.play();
+    } catch {
+      if (currentIdRef.current === rowId) { setPlayError("Couldn't play that track."); setAudioPlaying(false); }
+    }
+  };
+  playItemRef.current = playItem;
+
+  useEffect(() => () => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.onended = null; audioRef.current = null; }
+  }, []);
+  useEffect(() => { stop(); }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggle = (rowId) => {
+    const audio = audioRef.current;
+    if (playingId === rowId && audio && audio.src) {
+      if (audio.paused) audio.play().catch(() => setPlayError("Couldn't play that track."));
+      else audio.pause();
+      return;
+    }
+    playItem(rowId);
+  };
+
+  if (rows === null) return null;
+  if (items.length === 0) return <HomePracticePlayer piece={fallbackPiece} onNav={onNav} />;
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, marginTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <ListMusic size={15} color={C.plum} />
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Tonight's pieces</div>
+        <div style={{ fontSize: 10.5, color: C.inkSoft, marginLeft: "auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "55%" }}>{event.title}</div>
+      </div>
+
+      {items.map((it, i) => {
+        const isCurrent = playingId === it.rowId;
+        const isPlaying = isCurrent && audioPlaying;
+        const hasAudio = !!it.piece.audio_url;
+        return (
+          <div key={it.rowId} style={{ padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${C.lilacLine}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.lilacSoft, color: C.plum, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.piece.title}</div>
+                {it.piece.composer && <div style={{ fontSize: 10.5, color: C.inkSoft }}>{it.piece.composer}</div>}
+              </div>
+              {hasAudio ? (
+                <button
+                  onClick={() => toggle(it.rowId)} className="dvbc-tap"
+                  aria-label={isPlaying ? "Pause" : "Play"}
+                  style={{ width: 32, height: 32, borderRadius: "50%", border: "none", cursor: "pointer", background: gradient(), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  {isPlaying ? <Pause size={13} color="#fff" fill="#fff" /> : <Play size={13} color="#fff" fill="#fff" />}
+                </button>
+              ) : (
+                <div style={{ fontSize: 10.5, color: C.inkSoft, flexShrink: 0 }}>No audio</div>
+              )}
+            </div>
+            {isCurrent && (
+              <div
+                onClick={(e) => {
+                  const a = audioRef.current;
+                  if (!a) return;
+                  const dur = Number.isFinite(a.duration) && a.duration > 0
+                    ? a.duration
+                    : (a.seekable && a.seekable.length ? a.seekable.end(a.seekable.length - 1) : 0);
+                  if (!dur) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                  try { a.currentTime = frac * dur; } catch { return; }
+                  setProgress(frac);
+                }}
+                title="Tap to jump"
+                style={{ padding: "8px 0", marginTop: 2, cursor: "pointer" }}
+              >
+                <div style={{ height: 4, background: C.lilacLine, borderRadius: 999, overflow: "hidden" }}>
+                  <div style={{ width: `${progress * 100}%`, height: "100%", background: gradient() }} />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {playError && (
+        <div style={{ fontSize: 11, color: C.roseDeep, marginTop: 6 }}>{playError}</div>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+        <button onClick={() => onNav("library")} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 700, color: C.plum, textDecoration: "underline" }}>View Scores</button>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitPost, onNav, unreadCount = 0, onCheckIn, checkingIn, checkInError }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning," : hour < 18 ? "Good afternoon," : "Good evening,";
@@ -1433,7 +1670,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
           </div>
         </div>
 
-        <HomePracticePlayer piece={featuredPiece} onNav={onNav} />
+        <TonightsPieces event={nextEvent} pieces={pieces} fallbackPiece={featuredPiece} onNav={onNav} refreshTick={refreshTick} />
 
         <UpcomingBirthdays members={members} />
 
@@ -1525,7 +1762,116 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
             </div>
           </div>
         ))}
+
+        <ActivityFeed refreshTick={refreshTick} />
       </div>
+    </div>
+  );
+}
+
+// Setlist for a rehearsal/event: which library pieces to prepare. Stored in the
+// event_pieces table. Everyone can read it; admins can add and remove pieces.
+function EventSetlist({ eventId, pieces = [], isAdmin, onNav }) {
+  const [rows, setRows] = useState(null);
+  const [pick, setPick] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!eventId) return undefined;
+    let active = true;
+    setRows(null);
+    const load = async () => {
+      const { data, error: err } = await supabase
+        .from("event_pieces")
+        .select("id, piece_id, position")
+        .eq("event_id", eventId)
+        .order("position");
+      if (!active) return;
+      if (err) { setRows([]); return; }
+      setRows(data || []);
+    };
+    load();
+    const channel = supabase
+      .channel(`setlist-${eventId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "event_pieces", filter: `event_id=eq.${eventId}` }, () => load())
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, [eventId]);
+
+  const pieceById = (id) => pieces.find((pc) => String(pc.id) === String(id));
+  const items = (rows || []).map((r) => ({ ...r, piece: pieceById(r.piece_id) })).filter((r) => r.piece);
+  const usedIds = new Set((rows || []).map((r) => String(r.piece_id)));
+  const available = pieces.filter((pc) => !usedIds.has(String(pc.id)));
+
+  const addPiece = async () => {
+    if (!pick) return;
+    setBusy(true); setError("");
+    const nextPos = (rows || []).reduce((m, r) => Math.max(m, r.position ?? 0), 0) + 1;
+    const { error: err } = await supabase.from("event_pieces").insert({ event_id: eventId, piece_id: pick, position: nextPos });
+    if (err) setError(err.message || "Could not add piece."); else setPick("");
+    setBusy(false);
+  };
+
+  const removePiece = async (rowId) => {
+    setBusy(true); setError("");
+    const { error: err } = await supabase.from("event_pieces").delete().eq("id", rowId);
+    if (err) setError(err.message || "Could not remove piece.");
+    setBusy(false);
+  };
+
+  if (rows === null) return null;
+  if (!isAdmin && items.length === 0) return null;
+
+  return (
+    <div style={{ margin: "16px 24px 0", background: C.card, border: `1.4px solid ${C.lilacLine}`, borderRadius: 18, padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: C.ink, marginBottom: 8 }}>
+        <ListMusic size={15} color={C.plum} /> Setlist
+      </div>
+
+      {items.length === 0 && (
+        <div style={{ fontSize: 11.5, color: C.inkSoft, marginBottom: 8 }}>No pieces added yet.</div>
+      )}
+
+      {items.map((r, i) => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.lilacLine}` }}>
+          <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.lilacSoft, color: C.plum, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</div>
+          <button
+            onClick={() => onNav && onNav("library")} className="dvbc-tap"
+            style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", padding: 0, cursor: onNav ? "pointer" : "default", fontSize: 13, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
+            {r.piece.title}
+          </button>
+          {isAdmin && (
+            <button onClick={() => removePiece(r.id)} disabled={busy} aria-label="Remove from setlist" className="dvbc-tap"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+              <X size={15} color={C.roseDeep} />
+            </button>
+          )}
+        </div>
+      ))}
+
+      {isAdmin && (
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <select
+            value={pick} onChange={(e) => setPick(e.target.value)}
+            style={{ flex: 1, minWidth: 0, border: `1.4px solid ${C.lilacLine}`, borderRadius: 10, padding: "9px 10px", fontSize: 12.5, color: C.ink, background: C.card, fontFamily: "inherit" }}
+          >
+            <option value="">{available.length ? "Add a piece…" : "All library pieces added"}</option>
+            {available.map((pc) => <option key={pc.id} value={pc.id}>{pc.title}</option>)}
+          </select>
+          <button onClick={addPiece} disabled={!pick || busy} className="dvbc-tap"
+            style={{ display: "flex", alignItems: "center", gap: 4, background: C.plum, color: "#fff", fontWeight: 700, fontSize: 12, padding: "0 14px", borderRadius: 10, border: "none", cursor: pick && !busy ? "pointer" : "default", opacity: pick && !busy ? 1 : 0.5 }}>
+            <Plus size={13} /> Add
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.roseDeep, fontSize: 11.5, marginTop: 10 }}>
+          <AlertCircle size={13} /> {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -1850,7 +2196,7 @@ function CumulativeRegister({ members, loadingMembers }) {
   );
 }
 
-function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPresent, isAdmin, profile, events, loadingEvents, onCheckIn, checkingIn, checkInError, onCreateEvent, onUpdateEvent, onExportCalendar }) {
+function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPresent, isAdmin, profile, events, loadingEvents, onCheckIn, checkingIn, checkInError, onCreateEvent, onUpdateEvent, onExportCalendar, pieces = [], onNav }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [view, setView] = useState("event"); // "event" | "register"
@@ -2192,6 +2538,8 @@ function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPres
               </div>
             </div>
           </div>
+
+          <EventSetlist eventId={selectedEvent.id} pieces={pieces} isAdmin={isAdmin} onNav={onNav} />
 
           {!selectedEvent.track_attendance ? (
             <div style={{ margin: "16px 24px 0", fontSize: 11.5, color: C.inkSoft, textAlign: "center" }}>
@@ -8508,7 +8856,8 @@ export default function App() {
       events={events} loadingEvents={loadingEvents} onCycle={cycleEventAttendance}
       onSetStatus={setEventAttendance} onMarkUnmarkedPresent={markUnmarkedPresent}
       onCheckIn={checkInToEvent} checkingIn={checkingIn} checkInError={checkInError}
-      onCreateEvent={createEvent} onUpdateEvent={updateEvent} onExportCalendar={exportCalendar}/>
+      onCreateEvent={createEvent} onUpdateEvent={updateEvent} onExportCalendar={exportCalendar}
+      pieces={libraryPieces} onNav={setScreen}/>
   );
   else if (screen === "library") content = (
     <Library
