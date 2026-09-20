@@ -2902,7 +2902,7 @@ function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPres
   );
 }
 
-function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNotation }) {
+function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNotation, onUploadPdf }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [composer, setComposer] = useState(initial?.composer || "");
   const [tag, setTag] = useState(initial?.tag || "SATB");
@@ -2911,6 +2911,8 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNo
   const [audioFile, setAudioFile] = useState(null);
   const [existingNotationUrl, setExistingNotationUrl] = useState(initial?.notation_xml_url || "");
   const [notationFile, setNotationFile] = useState(null);
+  const [existingPdfUrl, setExistingPdfUrl] = useState(initial?.score_pdf_url || "");
+  const [pdfFile, setPdfFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -2937,7 +2939,13 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNo
         if (notationErr) throw new Error(notationErr);
         notation_xml_url = url;
       }
-      const payload = { title: title.trim(), composer: composer.trim() || null, tag, part, audio_url, notation_xml_url };
+      let score_pdf_url = existingPdfUrl || null;
+      if (pdfFile) {
+        const { url, error: pdfErr } = await onUploadPdf(pdfFile);
+        if (pdfErr) throw new Error(pdfErr);
+        score_pdf_url = url;
+      }
+      const payload = { title: title.trim(), composer: composer.trim() || null, tag, part, audio_url, notation_xml_url, score_pdf_url };
       const { error: saveErr } = initial ? await onSave.update(initial.id, payload) : await onSave.create(payload);
       if (saveErr) throw new Error(saveErr);
       onCancel();
@@ -3005,6 +3013,24 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNo
           <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 6 }}>Notation will be removed when you save.</div>
         )}
       </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Sheet music PDF (up to 20MB)</label>
+        <input type="file" accept=".pdf,application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} style={{ fontSize: 12.5, color: C.inkSoft }} />
+        {existingPdfUrl && !pdfFile && (
+          <div style={{ fontSize: 11, color: C.sage, marginTop: 6 }}>
+            PDF already attached — choose a file above to replace it.{" "}
+            <button
+              type="button" onClick={() => setExistingPdfUrl("")} className="dvbc-tap"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: C.roseDeep, fontSize: 11, fontWeight: 700, textDecoration: "underline" }}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+        {!existingPdfUrl && !pdfFile && initial?.score_pdf_url && (
+          <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 6 }}>PDF will be removed when you save.</div>
+        )}
+      </div>
       {error && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.roseDeep, fontSize: 11.5, marginBottom: 12 }}>
           <AlertCircle size={13} /> {error}
@@ -3028,7 +3054,7 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNo
   );
 }
 
-function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate, onUpdate, onDelete, onUploadAudio, onUploadNotation, myPart }) {
+function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate, onUpdate, onDelete, onUploadAudio, onUploadNotation, onUploadPdf, myPart }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const parts = ["All", "Soprano", "Alto", "Tenor", "Bass"];
@@ -3125,6 +3151,7 @@ function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate
           onSave={{ create: onCreate, update: onUpdate }}
           onUploadAudio={onUploadAudio}
           onUploadNotation={onUploadNotation}
+          onUploadPdf={onUploadPdf}
         />
       )}
 
@@ -3200,10 +3227,19 @@ function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate
                   <button
                     onClick={() => setScorePiece(p)} className="dvbc-tap"
                     style={{ width: 30, height: 30, borderRadius: "50%", border: `1.4px solid ${C.lilacLine}`, background: C.card, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                    title="View score and solfa" aria-label="View score and solfa"
+                    title="Play score and solfa" aria-label="Play score and solfa"
+                  >
+                    <ListMusic size={13} color={C.plum} />
+                  </button>
+                )}
+                {p.score_pdf_url && (
+                  <a
+                    href={p.score_pdf_url} target="_blank" rel="noopener noreferrer" className="dvbc-tap"
+                    style={{ width: 30, height: 30, borderRadius: "50%", border: `1.4px solid ${C.lilacLine}`, background: C.card, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                    title="Open sheet music PDF" aria-label="Open sheet music PDF"
                   >
                     <FileText size={13} color={C.plum} />
-                  </button>
+                  </a>
                 )}
                 {p.audio_url && (
                   <OfflineToggle
@@ -8817,6 +8853,18 @@ export default function App() {
     return { url: data.publicUrl };
   }, [profile]);
 
+  const uploadLibraryPdf = useCallback(async (file) => {
+    if (!profile) return { error: "Not signed in" };
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    if (ext !== "pdf" && file.type !== "application/pdf") return { error: "Please choose a PDF file." };
+    if (file.size > 20 * 1024 * 1024) return { error: "PDF must be under 20MB." };
+    const path = `${profile.id}/pdf-${Date.now()}.pdf`;
+    const { error: uploadError } = await supabase.storage.from("library-notation").upload(path, file, { contentType: "application/pdf" });
+    if (uploadError) return { error: uploadError.message };
+    const { data } = supabase.storage.from("library-notation").getPublicUrl(path);
+    return { url: data.publicUrl };
+  }, [profile]);
+
   const createLibraryPiece = useCallback(async (payload) => {
     if (!profile) return { error: "Not signed in" };
     const { error } = await supabase.from("library_pieces").insert({ ...payload, created_by: profile.id });
@@ -9029,7 +9077,7 @@ export default function App() {
       favorites={favorites} toggleFavorite={toggleFavorite} isAdmin={isAdmin}
       pieces={libraryPieces} loading={loadingLibrary}
       onCreate={createLibraryPiece} onUpdate={updateLibraryPiece} onDelete={deleteLibraryPiece}
-      onUploadAudio={uploadLibraryAudio} onUploadNotation={uploadLibraryNotation} myPart={profile?.part}
+      onUploadAudio={uploadLibraryAudio} onUploadNotation={uploadLibraryNotation} onUploadPdf={uploadLibraryPdf} myPart={profile?.part}
     />
   );
   else if (screen === "messages") content = (
