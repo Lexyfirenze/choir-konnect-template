@@ -4821,6 +4821,42 @@ function OwnContactInfo({ profile, onSave }) {
   );
 }
 
+// Shows the admin their choir's join code any time, with a copy button --
+// the only other place it appears is the one-time "choir created" screen.
+function ChoirJoinCode({ choirId }) {
+  const [choir, setChoir] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!choirId) return undefined;
+    let active = true;
+    supabase.from("choirs").select("name, slug").eq("id", choirId).single()
+      .then(({ data }) => { if (active) setChoir(data || null); });
+    return () => { active = false; };
+  }, [choirId]);
+
+  if (!choir?.slug) return null;
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(choir.slug); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
+  };
+
+  return (
+    <div style={{ background: "#fff", border: `1.4px solid ${C.lilacLine}`, borderRadius: 16, padding: "16px 18px", margin: "24px 0 10px" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase", marginBottom: 6 }}>
+        {choir.name} — join code
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: C.ink, letterSpacing: 0.5, flex: 1 }}>{choir.slug}</div>
+        <button onClick={copy} className="dvbc-tap" style={{ background: C.lilacSoft, color: C.plum, fontWeight: 700, fontSize: 12, padding: "8px 14px", borderRadius: 10, border: "none", cursor: "pointer", flexShrink: 0 }}>
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Share this with anyone who wants to join. They enter it when they sign up.</div>
+    </div>
+  );
+}
+
 function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo }) {
   const displayName = profile?.name || "Member";
   const pending = members.filter((m) => m.approval_status === "pending");
@@ -5016,6 +5052,7 @@ function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onR
 
         {isAdmin && (
           <>
+            <ChoirJoinCode choirId={profile?.choir_id} />
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: C.ink, margin: "24px 0 10px", display: "flex", alignItems: "center", gap: 8 }}>
               Pending Approvals
               {pending.length > 0 && (
