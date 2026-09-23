@@ -1357,7 +1357,7 @@ function ActivityFeed({ refreshTick = 0 }) {
 // "Tonight's pieces": the setlist of the next event, each with its own play button.
 // Plays one track at a time and moves on to the next piece with audio when one ends.
 // Falls back to the single featured-piece player when the event has no setlist.
-function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick = 0, memberId }) {
+function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick = 0, memberId, choirId }) {
   const [rows, setRows] = useState(null);
   const [playingId, setPlayingId] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -1400,6 +1400,8 @@ function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick 
   const loggedRef = useRef(false);
   const memberIdRef = useRef(memberId);
   memberIdRef.current = memberId;
+  const choirIdRef = useRef(choirId);
+  choirIdRef.current = choirId;
   const trackListen = (a) => {
     const d = a.currentTime - lastTimeRef.current;
     lastTimeRef.current = a.currentTime;
@@ -1408,6 +1410,7 @@ function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick 
       loggedRef.current = true;
       const item = itemsRef.current.find((i) => i.rowId === currentIdRef.current);
       supabase.from("practice_sessions").insert({
+        choir_id: choirIdRef.current,
         member_id: memberIdRef.current,
         kind: "listen",
         piece_id: item ? String(item.piece.id) : null,
@@ -1803,7 +1806,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
           </div>
         </div>
 
-        <TonightsPieces event={nextEvent} pieces={pieces} fallbackPiece={featuredPiece} onNav={onNav} refreshTick={refreshTick} memberId={profile?.id} />
+        <TonightsPieces event={nextEvent} pieces={pieces} fallbackPiece={featuredPiece} onNav={onNav} refreshTick={refreshTick} memberId={profile?.id} choirId={profile?.choir_id} />
 
         <UpcomingBirthdays members={members} />
 
@@ -1904,7 +1907,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
 
 // Setlist for a rehearsal/event: which library pieces to prepare. Stored in the
 // event_pieces table. Everyone can read it; admins can add and remove pieces.
-function EventSetlist({ eventId, pieces = [], isAdmin, onNav }) {
+function EventSetlist({ eventId, pieces = [], isAdmin, onNav, choirId }) {
   const [rows, setRows] = useState(null);
   const [pick, setPick] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1941,7 +1944,7 @@ function EventSetlist({ eventId, pieces = [], isAdmin, onNav }) {
     if (!pick) return;
     setBusy(true); setError("");
     const nextPos = (rows || []).reduce((m, r) => Math.max(m, r.position ?? 0), 0) + 1;
-    const { error: err } = await supabase.from("event_pieces").insert({ event_id: eventId, piece_id: pick, position: nextPos });
+    const { error: err } = await supabase.from("event_pieces").insert({ event_id: eventId, piece_id: pick, position: nextPos, choir_id: choirId });
     if (err) setError(err.message || "Could not add piece."); else setPick("");
     setBusy(false);
   };
@@ -2731,7 +2734,7 @@ function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPres
             </div>
           </div>
 
-          <EventSetlist eventId={selectedEvent.id} pieces={pieces} isAdmin={isAdmin} onNav={onNav} />
+          <EventSetlist eventId={selectedEvent.id} pieces={pieces} isAdmin={isAdmin} onNav={onNav} choirId={profile?.choir_id} />
           {isAdmin && <PracticeActivity members={members} />}
 
           {!selectedEvent.track_attendance ? (
@@ -4355,7 +4358,7 @@ function Messages({
   );
 }
 
-function Executives({ isAdmin }) {
+function Executives({ isAdmin, choirId }) {
   const [executives, setExecutives] = useState([]);
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4424,7 +4427,7 @@ function Executives({ isAdmin }) {
         if (error) throw error;
       } else {
         const maxOrder = executives.reduce((m, e) => Math.max(m, e.display_order || 0), 0);
-        const { error } = await supabase.from("executives").insert({ ...payload, display_order: maxOrder + 1 });
+        const { error } = await supabase.from("executives").insert({ ...payload, display_order: maxOrder + 1, choir_id: choirId });
         if (error) throw error;
       }
       resetExecForm();
@@ -4460,7 +4463,7 @@ function Executives({ isAdmin }) {
       await supabase.from("voice_part_leaders").update(leaderForm).eq("id", editingLeader.id);
     } else {
       const maxOrder = leaders.reduce((m, l) => Math.max(m, l.display_order || 0), 0);
-      await supabase.from("voice_part_leaders").insert({ ...leaderForm, display_order: maxOrder + 1 });
+      await supabase.from("voice_part_leaders").insert({ ...leaderForm, display_order: maxOrder + 1, choir_id: choirId });
     }
     resetLeaderForm();
     loadData();
@@ -5414,7 +5417,7 @@ function AnnotatedPdfPage({ pdfDoc, pageNumber, zoomLevel, drawMode, tool, color
   );
 }
 
-function SheetMusicViewer({ path, title, onClose, userId }) {
+function SheetMusicViewer({ path, title, onClose, userId, choirId }) {
   const [sourceUrl, setSourceUrl] = useState(null);
   const [isOfflineCopy, setIsOfflineCopy] = useState(false);
   const [error, setError] = useState("");
@@ -5522,7 +5525,7 @@ function SheetMusicViewer({ path, title, onClose, userId }) {
     if (!userId) return;
     const { data, error: insertError } = await supabase
       .from("sheet_annotations")
-      .insert({ sheet_path: path, user_id: userId, page_number: pageNumber, tool: stroke.tool, color: stroke.color, stroke_width: stroke.stroke_width, points: stroke.points })
+      .insert({ sheet_path: path, user_id: userId, page_number: pageNumber, tool: stroke.tool, color: stroke.color, stroke_width: stroke.stroke_width, points: stroke.points, choir_id: choirId })
       .select()
       .single();
     if (insertError || !data) return;
@@ -5825,7 +5828,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
         const { error } = await supabase.from("solfege_patterns").update(payload).eq("id", editingPattern.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("solfege_patterns").insert({ ...payload, created_by: profile.id });
+        const { error } = await supabase.from("solfege_patterns").insert({ ...payload, created_by: profile.id, choir_id: profile.choir_id });
         if (error) throw error;
       }
       resetPatternForm();
@@ -5974,7 +5977,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
         const { error } = await supabase.from("assignments").update(payload).eq("id", editingAssignment.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("assignments").insert({ ...payload, created_by: profile.id });
+        const { error } = await supabase.from("assignments").insert({ ...payload, created_by: profile.id, choir_id: profile.choir_id });
         if (error) throw error;
       }
       resetAssignmentForm();
@@ -6002,7 +6005,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
       await supabase.from("assignment_completions").delete().eq("assignment_id", a.id).eq("member_id", profile.id);
       setCompletions((prev) => prev.filter((c) => !(c.assignment_id === a.id && c.member_id === profile.id)));
     } else {
-      await supabase.from("assignment_completions").insert({ assignment_id: a.id, member_id: profile.id });
+      await supabase.from("assignment_completions").insert({ assignment_id: a.id, member_id: profile.id, choir_id: profile.choir_id });
       setCompletions((prev) => [...prev, { assignment_id: a.id, member_id: profile.id }]);
     }
     setCompletingId(null);
@@ -6202,7 +6205,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
         if (error) throw error;
       } else {
         const maxOrder = lists.reduce((m, l) => Math.max(m, l.display_order || 0), 0);
-        const { error } = await supabase.from("practice_lists").insert({ ...payload, display_order: maxOrder + 1 });
+        const { error } = await supabase.from("practice_lists").insert({ ...payload, display_order: maxOrder + 1, choir_id: profile.choir_id });
         if (error) throw error;
       }
       resetListForm();
@@ -6287,7 +6290,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
         if (error) throw error;
       } else {
         const maxOrder = (openList?.tracks || []).reduce((m, t) => Math.max(m, t.display_order || 0), 0);
-        const { data, error } = await supabase.from("practice_tracks").insert({ ...payload, display_order: maxOrder + 1 }).select().single();
+        const { data, error } = await supabase.from("practice_tracks").insert({ ...payload, display_order: maxOrder + 1, choir_id: profile.choir_id }).select().single();
         if (error) throw error;
         trackId = data.id;
       }
@@ -6481,7 +6484,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
           </div>
         </div>
         {viewingSheet && (
-          <SheetMusicViewer path={viewingSheet.path} title={viewingSheet.title} onClose={() => setViewingSheet(null)} userId={myUserId} />
+          <SheetMusicViewer path={viewingSheet.path} title={viewingSheet.title} onClose={() => setViewingSheet(null)} userId={myUserId} choirId={profile?.choir_id} />
         )}
       </div>
     );
@@ -6649,7 +6652,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
           </div>
         )}
         {viewingSheet && (
-          <SheetMusicViewer path={viewingSheet.path} title={viewingSheet.title} onClose={() => setViewingSheet(null)} userId={myUserId} />
+          <SheetMusicViewer path={viewingSheet.path} title={viewingSheet.title} onClose={() => setViewingSheet(null)} userId={myUserId} choirId={profile?.choir_id} />
         )}
       </div>
     );
@@ -8615,13 +8618,13 @@ export default function App() {
 
   const submitPost = useCallback(async (content) => {
     if (!profile) return;
-    await supabase.from("posts").insert({ author_id: profile.id, content });
+    await supabase.from("posts").insert({ author_id: profile.id, content, choir_id: profile.choir_id });
     loadPosts();
   }, [profile, loadPosts]);
 
   const submitComment = useCallback(async (postId, content) => {
     if (!profile) return;
-    await supabase.from("post_comments").insert({ post_id: postId, author_id: profile.id, content });
+    await supabase.from("post_comments").insert({ post_id: postId, author_id: profile.id, content, choir_id: profile.choir_id });
     loadPosts();
   }, [profile, loadPosts]);
 
@@ -8742,6 +8745,7 @@ export default function App() {
         callee_id: isGroup ? null : calleeId,
         is_group: !!isGroup,
         status: isGroup ? "accepted" : "ringing",
+        choir_id: profile.choir_id,
       })
       .select()
       .single();
@@ -8785,7 +8789,7 @@ export default function App() {
 
     const { data: conv, error: convError } = await supabase
       .from("conversations")
-      .insert({ is_group: !!isGroup, title: isGroup ? title : null, created_by: profile.id })
+      .insert({ is_group: !!isGroup, title: isGroup ? title : null, created_by: profile.id, choir_id: profile.choir_id })
       .select()
       .single();
     if (convError || !conv) return;
@@ -8793,6 +8797,7 @@ export default function App() {
     const participantRows = [profile.id, ...memberIds].map((member_id) => ({
       conversation_id: conv.id,
       member_id,
+      choir_id: profile.choir_id,
     }));
     await supabase.from("conversation_participants").insert(participantRows);
 
@@ -8809,7 +8814,7 @@ export default function App() {
 
   const sendChatMessage = useCallback(async (conversationId, content) => {
     if (!profile) return;
-    await supabase.from("chat_messages").insert({ conversation_id: conversationId, sender_id: profile.id, content });
+    await supabase.from("chat_messages").insert({ conversation_id: conversationId, sender_id: profile.id, content, choir_id: profile.choir_id });
     await supabase
       .from("conversation_participants")
       .update({ last_read_at: new Date().toISOString() })
@@ -8841,6 +8846,7 @@ export default function App() {
       message_type: "voice_note",
       audio_url: pub?.publicUrl,
       duration_seconds: Math.round(durationSeconds || 0),
+      choir_id: profile.choir_id,
     });
     await supabase
       .from("conversation_participants")
@@ -8924,7 +8930,7 @@ export default function App() {
 
   const createEvent = useCallback(async (payload) => {
     if (!profile) return { error: "Not signed in" };
-    const { error } = await supabase.from("events").insert({ ...payload, created_by: profile.id });
+    const { error } = await supabase.from("events").insert({ ...payload, created_by: profile.id, choir_id: profile.choir_id });
     return { error: error?.message };
   }, [profile]);
 
@@ -8972,7 +8978,7 @@ export default function App() {
 
   const createLibraryPiece = useCallback(async (payload) => {
     if (!profile) return { error: "Not signed in" };
-    const { error } = await supabase.from("library_pieces").insert({ ...payload, created_by: profile.id });
+    const { error } = await supabase.from("library_pieces").insert({ ...payload, created_by: profile.id, choir_id: profile.choir_id });
     return { error: error?.message };
   }, [profile]);
 
@@ -9196,7 +9202,7 @@ export default function App() {
       onMarkConversationRead={markConversationRead} onDeletePost={deletePost} onSendVoiceNote={sendVoiceNote}
       onStartCall={startCall} onEditChatMessage={editChatMessage} onDeleteChatMessage={deleteChatMessage} />
   );
-  else if (screen === "executives") content = <Executives isAdmin={isAdmin} />;
+  else if (screen === "executives") content = <Executives isAdmin={isAdmin} choirId={profile?.choir_id} />;
   else if (screen === "communication") content = (
     <CommunicationSettings
       onBack={() => setScreen("profile")}
