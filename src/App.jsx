@@ -698,7 +698,7 @@ function Chip({ active, children, onClick }) {
 
 /* ---------- Screens ---------- */
 function LoginScreen({ onAuthed }) {
-  const [mode, setMode] = useState("signin"); // "signin" | "register" | "forgot"
+  const [mode, setMode] = useState("signin"); // "signin" | "register" | "forgot" | "created"
   const [name, setName] = useState("");
   const [part, setPart] = useState(VOICE_PARTS[0]);
   const [email, setEmail] = useState("");
@@ -707,6 +707,11 @@ function LoginScreen({ onAuthed }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [choirAction, setChoirAction] = useState("join"); // "join" | "create" — which choir to attach to on register
+  const [choirName, setChoirName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [newJoinCode, setNewJoinCode] = useState(""); // shown after creating a choir, so the admin can share it
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -740,23 +745,49 @@ function LoginScreen({ onAuthed }) {
     setBusy(true);
     try {
       if (mode === "register") {
+        if (choirAction === "create" && !choirName.trim()) {
+          setError("Enter a name for your choir.");
+          setBusy(false);
+          return;
+        }
+        if (choirAction === "join" && !joinCode.trim()) {
+          setError("Enter your choir's join code. Ask your director for it.");
+          setBusy(false);
+          return;
+        }
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
         });
         if (signUpError) throw signUpError;
-        const userId = data.user?.id;
-        if (userId) {
-          const { error: insertError } = await supabase
-            .from("members")
-            .insert({ user_id: userId, name: name.trim(), part, status: "present" });
-          if (insertError) throw insertError;
-        }
         if (!data.session) {
-          setError("Account created — you can sign in now.");
+          // Email confirmation is required before we can attach a choir, since
+          // that needs an authenticated session. They finish this step after
+          // confirming and signing in for the first time.
+          setError("Account created — check your email to confirm it, then sign in to finish joining your choir.");
           setMode("signin");
           setBusy(false);
           return;
+        }
+        if (choirAction === "create") {
+          const { data: choirData, error: choirError } = await supabase.rpc("create_choir", {
+            p_choir_name: choirName.trim(),
+            p_member_name: name.trim(),
+            p_part: part,
+          });
+          if (choirError) throw choirError;
+          const row = Array.isArray(choirData) ? choirData[0] : choirData;
+          setNewJoinCode(row?.join_code || "");
+          setMode("created");
+          setBusy(false);
+          return;
+        } else {
+          const { error: joinError } = await supabase.rpc("join_choir", {
+            p_code: joinCode.trim(),
+            p_member_name: name.trim(),
+            p_part: part,
+          });
+          if (joinError) throw joinError;
         }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -797,16 +828,41 @@ function LoginScreen({ onAuthed }) {
 
       <div style={{ flex: 1, background: C.parchment, borderRadius: "26px 26px 0 0", marginTop: -18, padding: "30px 26px calc(env(safe-area-inset-bottom, 0px) + 30px)" }}>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: C.ink, marginBottom: 6 }}>
-          {mode === "signin" ? "Welcome back" : mode === "forgot" ? "Reset your password" : "Join the chorale"}
+          {mode === "signin" ? "Welcome back" : mode === "forgot" ? "Reset your password" : mode === "created" ? "Your choir is ready" : "Join the chorale"}
         </div>
         <div style={{ fontSize: 12.5, color: C.inkSoft, lineHeight: 1.5, marginBottom: 22 }}>
           {mode === "signin"
             ? "Sign in to view rehearsals, mark attendance, and reach your music library."
             : mode === "forgot"
             ? "Enter the email on your account and we'll send you a link to set a new password."
+            : mode === "created"
+            ? "Share this code with your members so they can join."
             : "Register once — your name and voice part will appear on the shared attendance sheet."}
         </div>
 
+        {mode === "created" ? (
+          <div>
+            <div style={{ border: `1.4px solid ${C.lilacLine}`, background: "#fff", borderRadius: 14, padding: "22px 18px", textAlign: "center", marginBottom: 18 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase", marginBottom: 8 }}>Join code</div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, color: C.ink, letterSpacing: 1, marginBottom: 14 }}>{newJoinCode || "—"}</div>
+              <button
+                type="button" className="dvbc-tap"
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(newJoinCode); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 1800); } catch { /* clipboard blocked */ }
+                }}
+                style={{ background: C.lilacSoft, color: C.plum, fontWeight: 700, fontSize: 12.5, padding: "9px 18px", borderRadius: 10, border: "none", cursor: "pointer" }}
+              >
+                {codeCopied ? "Copied" : "Copy code"}
+              </button>
+            </div>
+            <button
+              type="button" onClick={onAuthed} className="dvbc-tap"
+              style={{ width: "100%", background: gradient(), color: "#fff", fontWeight: 600, fontSize: 15, padding: 16, borderRadius: 14, border: "none", cursor: "pointer" }}
+            >
+              Continue to your choir
+            </button>
+          </div>
+        ) : (
         <form onSubmit={submit}>
           {mode === "register" && (
             <>
@@ -829,6 +885,50 @@ function LoginScreen({ onAuthed }) {
                   {VOICE_PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
+
+              <div style={{ display: "flex", gap: 8, margin: "0 0 16px" }}>
+                <button
+                  type="button" className="dvbc-tap"
+                  onClick={() => setChoirAction("join")}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontSize: 12.5, fontWeight: 700, border: `1.4px solid ${choirAction === "join" ? C.accent : C.lilacLine}`, background: choirAction === "join" ? C.accent : "#fff", color: choirAction === "join" ? "#fff" : C.inkSoft, cursor: "pointer" }}
+                >
+                  Join with a code
+                </button>
+                <button
+                  type="button" className="dvbc-tap"
+                  onClick={() => setChoirAction("create")}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontSize: 12.5, fontWeight: 700, border: `1.4px solid ${choirAction === "create" ? C.accent : C.lilacLine}`, background: choirAction === "create" ? C.accent : "#fff", color: choirAction === "create" ? "#fff" : C.inkSoft, cursor: "pointer" }}
+                >
+                  Start a new choir
+                </button>
+              </div>
+
+              {choirAction === "join" ? (
+                <>
+                  <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase" }}>Choir join code</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1.4px solid ${C.lilacLine}`, background: "#fff", borderRadius: 12, padding: "12px 14px", margin: "6px 0 16px" }}>
+                    <Users size={16} color={C.inkSoft} />
+                    <input
+                      value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
+                      placeholder="Ask your director for this"
+                      style={{ border: "none", outline: "none", fontSize: 13.5, flex: 1, background: "transparent", color: C.ink }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase" }}>Choir name</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1.4px solid ${C.lilacLine}`, background: "#fff", borderRadius: 12, padding: "12px 14px", margin: "6px 0 16px" }}>
+                    <Users size={16} color={C.inkSoft} />
+                    <input
+                      value={choirName} onChange={(e) => setChoirName(e.target.value)}
+                      placeholder="e.g. St. Cecilia Choir"
+                      style={{ border: "none", outline: "none", fontSize: 13.5, flex: 1, background: "transparent", color: C.ink }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 11, color: C.inkSoft, margin: "-10px 0 16px" }}>You'll be the first admin, and get a code to invite your members.</div>
+                </>
+              )}
             </>
           )}
 
@@ -893,7 +993,10 @@ function LoginScreen({ onAuthed }) {
             {busy ? "Please wait…" : mode === "signin" ? "Sign In" : mode === "forgot" ? "Send Reset Link" : "Create Account"}
           </button>
         </form>
+        )}
 
+        {mode !== "created" && (
+        <>
         <div style={{ textAlign: "center", fontSize: 11, color: "#BBAEC4", margin: "18px 0", letterSpacing: 1 }}>— OR —</div>
         <button
           onClick={() => { setMode(mode === "register" ? "signin" : mode === "forgot" ? "signin" : "register"); setError(""); setNotice(""); }}
@@ -906,6 +1009,8 @@ function LoginScreen({ onAuthed }) {
             ? <>Remembered it? <span style={{ color: C.accent, fontWeight: 700 }}>Back to sign in</span></>
             : <>Already registered? <span style={{ color: C.accent, fontWeight: 700 }}>Sign in</span></>}
         </button>
+        </>
+        )}
       </div>
     </div>
   );
