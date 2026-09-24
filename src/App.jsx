@@ -9,7 +9,12 @@ import photoImg from "./assets/chorale-photo.jpg";
 import photoImg2 from "./assets/chorale-photo-2.jpg";
 import photoImg3 from "./assets/chorale-photo-3.jpg";
 import { supabase } from "./supabaseClient";
-import { CHOIR_NAME, CHOIR_NAME_SHORT, CHOIR_COUNTRY, WHATSAPP_GROUP_LINK, VAPID_PUBLIC_KEY, PRIVACY_POLICY_TEXT, ABOUT_TEXT } from "./config";import StaffRenderer from "./components/StaffRenderer";import NotationFlashcards from "./components/NotationFlashcards";import RhythmGame from "./components/RhythmGame";
+import { CHOIR_NAME, CHOIR_NAME_SHORT, CHOIR_COUNTRY, WHATSAPP_GROUP_LINK, VAPID_PUBLIC_KEY, PRIVACY_POLICY_TEXT, ABOUT_TEXT } from "./config";
+// Shown only on screens nobody has signed in to a specific choir on yet
+// (sign-in, register, password reset) -- these are shared by every choir on
+// ChoirKonnect, so they must not show any one choir's name.
+const APP_BRAND = "ChoirKonnect";
+import StaffRenderer from "./components/StaffRenderer";import NotationFlashcards from "./components/NotationFlashcards";import RhythmGame from "./components/RhythmGame";
 import SolfegeSinger from "./components/SolfegeSinger";
 import ScoreReader from "./components/ScoreReader";
 import { generateICS, downloadICS } from './utils/dvbc-ics-export.js';
@@ -220,7 +225,7 @@ function RingProgress({ value = 0, size = 64, strokeWidth = 7, color, track, chi
 }
 
 /* ---------- Auto-rotating hero photo carousel ---------- */
-function HeroCarousel({ photos, height = 190, intervalMs = 4500, greeting, displayName }) {
+function HeroCarousel({ photos, height = 190, intervalMs = 4500, greeting, displayName, choirName }) {
   const [index, setIndex] = useState(0);
   const touchStartX = useRef(null);
   useEffect(() => {
@@ -247,7 +252,7 @@ function HeroCarousel({ photos, height = 190, intervalMs = 4500, greeting, displ
       {photos.map((src, i) => (
         <img
           key={src}
-          src={src} alt={`${CHOIR_NAME} members`}
+          src={src} alt={choirName ? `${choirName} members` : "Choir members"}
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block",
             opacity: i === index ? 1 : 0, transition: "opacity 0.6s ease",
@@ -260,7 +265,7 @@ function HeroCarousel({ photos, height = 190, intervalMs = 4500, greeting, displ
           <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>{greeting} {displayName}</div>
         )}
         <div style={{ fontSize: 10.5, letterSpacing: 2, fontWeight: 700, color: C.lilac, textTransform: "uppercase" }}>Our Chorale</div>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 3 }}>Beautiful voices, one family</div>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, marginTop: 3 }}>{choirName || "Beautiful voices, one family"}</div>
       </div>
       {photos.length > 1 && (
         <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 5 }}>
@@ -311,7 +316,7 @@ function ConfettiBurst({ burstKey }) {
 
 /* ---------- First-time onboarding tour ---------- */
 const ONBOARDING_SLIDES = [
-  { Icon: Home, title: `Welcome to ${CHOIR_NAME_SHORT}`, body: "Your home for rehearsals, scores, and everything chorale — all in one place." },
+  { Icon: Home, title: null, body: "Your home for rehearsals, scores, and everything chorale — all in one place." }, // title filled in per-choir at render time, see OnboardingTour
   { Icon: CheckSquare, title: "Track Attendance", body: "Check in to rehearsals and events right from your phone the moment check-in opens." },
   { Icon: Music2, title: "Announcements & Library", body: "Catch every update on Home, and pull up scores or recordings anytime in Library." },
 ];
@@ -348,7 +353,7 @@ function Toast({ toast, onClose }) {
   );
 }
 
-function OnboardingTour({ profile }) {
+function OnboardingTour({ profile, choirName }) {
   const key = profile?.id ? `dvbc-onboarded-${profile.id}` : null;
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
@@ -363,6 +368,7 @@ function OnboardingTour({ profile }) {
     setVisible(false);
   };
   const slide = ONBOARDING_SLIDES[step];
+  const slideTitle = slide.title || `Welcome to ${choirName || APP_BRAND}`;
   const isLast = step === ONBOARDING_SLIDES.length - 1;
 
   return (
@@ -380,7 +386,7 @@ function OnboardingTour({ profile }) {
         }}>
           <slide.Icon size={24} color="#fff" />
         </div>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: C.ink }}>{slide.title}</div>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: C.ink }}>{slideTitle}</div>
         <div style={{ fontSize: 13.5, color: C.inkSoft, marginTop: 8, lineHeight: 1.5 }}>{slide.body}</div>
 
         <div style={{ display: "flex", gap: 6, marginTop: 22 }}>
@@ -817,9 +823,8 @@ function LoginScreen({ onAuthed }) {
           </div>
         </div>
         <div style={{ color: "#fff", fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600 }}>
-          <span style={{ fontStyle: "italic", color: C.lilac }}>{CHOIR_NAME}</span>
+          <span style={{ fontStyle: "italic", color: C.lilac }}>{APP_BRAND}</span>
         </div>
-        <div style={{ color: C.lilac, fontSize: 11, letterSpacing: 4, fontWeight: 700, marginTop: 3 }}>{CHOIR_COUNTRY}</div>
         <div style={{ margin: "18px 30px 0" }}><Staff light /></div>
         <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11.5, letterSpacing: 2, fontWeight: 600, marginTop: 14 }}>
           MEMBERS PORTAL
@@ -1059,7 +1064,7 @@ function ResetPasswordScreen({ onDone }) {
           </div>
         </div>
         <div style={{ color: "#fff", fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600 }}>
-          <span style={{ fontStyle: "italic", color: C.lilac }}>{CHOIR_NAME}</span>
+          <span style={{ fontStyle: "italic", color: C.lilac }}>{APP_BRAND}</span>
         </div>
         <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 11.5, letterSpacing: 2, fontWeight: 600, marginTop: 14 }}>
           SET A NEW PASSWORD
@@ -1120,7 +1125,7 @@ function ResetPasswordScreen({ onDone }) {
   );
 }
 
-function PendingApproval({ profile, onLogout }) {
+function PendingApproval({ profile, onLogout, choirName }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <div style={{ background: gradient(), padding: "calc(env(safe-area-inset-top, 0px) + 40px) 32px 30px", textAlign: "center", flexShrink: 0 }}>
@@ -1134,9 +1139,8 @@ function PendingApproval({ profile, onLogout }) {
           </div>
         </div>
         <div style={{ color: "#fff", fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600 }}>
-          <span style={{ fontStyle: "italic", color: C.lilac }}>{CHOIR_NAME}</span>
+          <span style={{ fontStyle: "italic", color: C.lilac }}>{choirName || APP_BRAND}</span>
         </div>
-        <div style={{ color: C.lilac, fontSize: 11, letterSpacing: 4, fontWeight: 700, marginTop: 3 }}>{CHOIR_COUNTRY}</div>
       </div>
 
       <div style={{ flex: 1, background: C.parchment, borderRadius: "26px 26px 0 0", marginTop: -18, padding: "40px 26px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
@@ -1558,7 +1562,7 @@ function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick 
   );
 }
 
-function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitPost, onNav, unreadCount = 0, onCheckIn, checkingIn, checkInError }) {
+function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitPost, onNav, unreadCount = 0, onCheckIn, checkingIn, checkInError, choirName }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning," : hour < 18 ? "Good afternoon," : "Good evening,";
   const displayName = profile?.name ? profile.name.split(" ")[0] : "Member";
@@ -1678,7 +1682,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
             width: 30, height: 30, borderRadius: 9, overflow: "hidden", flexShrink: 0,
             border: `1.5px solid ${C.lilac}`, background: "#fff",
           }}>
-            <img src={logoImg} alt={CHOIR_NAME} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={logoImg} alt={choirName || "Choir logo"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <div>
           </div>
@@ -1719,7 +1723,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
 
       <div style={{ padding: "18px 24px" }}>
         <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", boxShadow: C.heroShadow }}>
-          <HeroCarousel photos={HERO_PHOTOS} height={190} greeting={greeting} displayName={displayName} />
+          <HeroCarousel photos={HERO_PHOTOS} height={190} greeting={greeting} displayName={displayName} choirName={choirName} />
         </div>
 
         {nextEvent ? (
@@ -2198,7 +2202,7 @@ const REGISTER_RANGES = [
   { key: "12", label: "Last 12", n: 12 },
 ];
 
-function CumulativeRegister({ members, loadingMembers }) {
+function CumulativeRegister({ members, loadingMembers, choirName }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -2278,7 +2282,7 @@ function CumulativeRegister({ members, loadingMembers }) {
       const rate = stats.total ? `${Math.round((stats.present / stats.total) * 100)}%` : "—";
       return `<tr><td>${section}</td><td>${m.name}</td><td>${m.part}</td><td>${stats.present}</td><td>${stats.absent}</td><td>${stats.excused}</td><td>${stats.total}</td><td>${rate}</td></tr>`;
     }).join("");
-    win.document.write(`<!DOCTYPE html><html><head><title>${CHOIR_NAME_SHORT} Attendance Register</title>
+    win.document.write(`<!DOCTYPE html><html><head><title>${choirName || APP_BRAND} Attendance Register</title>
       <style>
         body{font-family:Arial,sans-serif;padding:24px;color:#231A3B;}
         h1{font-size:18px;margin-bottom:2px;}
@@ -2287,7 +2291,7 @@ function CumulativeRegister({ members, loadingMembers }) {
         th,td{border:1px solid #ddd;padding:6px 8px;font-size:12px;text-align:left;}
         th{background:#f1edfc;}
       </style></head><body>
-      <h1>${CHOIR_NAME_SHORT} Cumulative Attendance Register</h1>
+      <h1>${choirName || APP_BRAND} Cumulative Attendance Register</h1>
       <p>Range: ${activeRange.label} · ${rangeRehearsalCount} rehearsal${rangeRehearsalCount === 1 ? "" : "s"} · Generated ${new Date().toLocaleDateString()}</p>
       <table><thead><tr><th>Section</th><th>Name</th><th>Part</th><th>Present</th><th>Absent</th><th>Excused</th><th>Total</th><th>Rate</th></tr></thead>
       <tbody>${tableRows}</tbody></table>
@@ -2391,7 +2395,7 @@ function CumulativeRegister({ members, loadingMembers }) {
   );
 }
 
-function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPresent, isAdmin, profile, events, loadingEvents, onCheckIn, checkingIn, checkInError, onCreateEvent, onUpdateEvent, onExportCalendar, pieces = [], onNav }) {
+function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPresent, isAdmin, profile, events, loadingEvents, onCheckIn, checkingIn, checkInError, onCreateEvent, onUpdateEvent, onExportCalendar, pieces = [], onNav, choirName }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [view, setView] = useState("event"); // "event" | "register"
@@ -2631,7 +2635,7 @@ function Attendance({ members, loading, onCycle, onSetStatus, onMarkUnmarkedPres
         <Chip active={view === "register"} onClick={() => setView("register")}>Cumulative Register</Chip>
       </div>
 
-      {view === "register" && <CumulativeRegister members={members} loadingMembers={loading} />}
+      {view === "register" && <CumulativeRegister members={members} loadingMembers={loading} choirName={choirName} />}
 
       {view === "event" && (
       <>
@@ -5110,7 +5114,7 @@ function ControlRoom({ onBack }) {
   );
 }
 
-function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo, isPlatformAdmin }) {
+function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo, isPlatformAdmin, choirName }) {
   const displayName = profile?.name || "Member";
   const pending = members.filter((m) => m.approval_status === "pending");
   const approvedMembers = members.filter((m) => m.approval_status === "approved");
@@ -5290,7 +5294,7 @@ function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onR
           { label: "Executives", nav: "executives" },
           ...(isAdmin ? [{ label: "Communication Settings", nav: "communication" }] : []),
           { label: "Privacy", nav: "privacy" },
-          { label: `About ${CHOIR_NAME}`, nav: "about" },
+          { label: `About ${choirName || APP_BRAND}`, nav: "about" },
         ].map(({ label, nav }) => (
           <div
             key={label}
@@ -8641,6 +8645,7 @@ export default function App() {
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [profile, setProfile] = useState(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [currentChoirName, setCurrentChoirName] = useState("");
   const [darkMode, setDarkMode] = useState(() => store.get("dvbc-dark-mode", false));
   const [, forceThemeRerender] = useState(0);
   useEffect(() => {
@@ -8791,6 +8796,14 @@ export default function App() {
     if (!session) { setIsPlatformAdmin(false); return; }
     supabase.rpc("is_platform_admin").then(({ data }) => setIsPlatformAdmin(!!data));
   }, [session]);
+
+  useEffect(() => {
+    if (!profile?.choir_id) { setCurrentChoirName(""); return; }
+    let active = true;
+    supabase.from("choirs").select("name").eq("id", profile.choir_id).single()
+      .then(({ data }) => { if (active) setCurrentChoirName(data?.name || ""); });
+    return () => { active = false; };
+  }, [profile?.choir_id]);
 
   useEffect(() => {
     if (!session) return;
@@ -9370,7 +9383,7 @@ export default function App() {
     return;
   }
   haptic(10);
-  const icsContent = generateICS(upcomingEvents, `${CHOIR_NAME} Rehearsals`);
+  const icsContent = generateICS(upcomingEvents, `${currentChoirName || APP_BRAND} Rehearsals`);
   const filename = `dvbc-rehearsals-${new Date().toISOString().slice(0, 10)}.ics`;
   downloadICS(icsContent, filename);
   setToast({ title: "Calendar exported", body: `${upcomingEvents.length} rehearsal(s) ready to import.` });
@@ -9473,7 +9486,7 @@ export default function App() {
     return (
       <div style={{ minHeight: "100vh", background: C.parchment, fontFamily: "'Outfit', system-ui, sans-serif" }}>
         <style>{TAP_STYLES}</style>
-        <PendingApproval profile={profile} onLogout={logout} />
+        <PendingApproval profile={profile} onLogout={logout} choirName={currentChoirName} />
       </div>
     );
   }
@@ -9483,7 +9496,7 @@ export default function App() {
   if (screen === "dashboard") content = (
     <Dashboard profile={profile} members={members} events={events} posts={posts} pieces={libraryPieces} isAdmin={isAdmin} onSubmitPost={submitPost} onNav={setScreen}
       unreadCount={unreadPostCount} onCheckIn={checkInToEvent}
-      checkingIn={checkingIn} checkInError={checkInError} />
+      checkingIn={checkingIn} checkInError={checkInError} choirName={currentChoirName} />
   );
   else if (screen === "attendance") content = (
     <Attendance members={members} loading={loadingMembers} isAdmin={isAdmin} profile={profile}
@@ -9491,7 +9504,7 @@ export default function App() {
       onSetStatus={setEventAttendance} onMarkUnmarkedPresent={markUnmarkedPresent}
       onCheckIn={checkInToEvent} checkingIn={checkingIn} checkInError={checkInError}
       onCreateEvent={createEvent} onUpdateEvent={updateEvent} onExportCalendar={exportCalendar}
-      pieces={libraryPieces} onNav={setScreen}/>
+      pieces={libraryPieces} onNav={setScreen} choirName={currentChoirName}/>
   );
   else if (screen === "library") content = (
     <Library
@@ -9537,7 +9550,7 @@ else if (screen === "notation") content = <NotationFlashcards onBack={() => setS
       soundEnabled={soundEnabled} onToggleSound={() => setSoundEnabled((v) => !v)}
       pushSubscribed={pushSubscribed} pushBusy={pushBusy} onEnablePush={enablePush} onDisablePush={disablePush}
       isIOS={isIOS} isStandalone={isStandalone} onUpdateOwnInfo={updateOwnInfo}
-      isPlatformAdmin={isPlatformAdmin}
+      isPlatformAdmin={isPlatformAdmin} choirName={currentChoirName}
       onNavSettings={(nav) => setScreen(nav)} />
   );
 
@@ -9550,7 +9563,7 @@ else if (screen === "notation") content = <NotationFlashcards onBack={() => setS
         <div key={screen} className="dvbc-screen-enter">{content}</div>
       </ErrorBoundary>
       {showBottomNav && <BottomNav screen={screen} onNav={setScreen} />}
-      <OnboardingTour profile={profile} />
+      <OnboardingTour profile={profile} choirName={currentChoirName} />
       <Toast toast={toast} onClose={() => setToast(null)} />
       <IncomingCallBanner call={incomingCall} onAccept={acceptIncomingCall} onDecline={declineIncomingCall} />
       {activeCall && <CallScreen call={activeCall} profile={profile} onLeave={endActiveCall} />}
