@@ -4826,19 +4826,30 @@ function OwnContactInfo({ profile, onSave }) {
 function ChoirJoinCode({ choirId }) {
   const [choir, setChoir] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!choirId) return undefined;
-    let active = true;
+  const load = () => {
+    if (!choirId) return;
     supabase.from("choirs").select("name, slug").eq("id", choirId).single()
-      .then(({ data }) => { if (active) setChoir(data || null); });
-    return () => { active = false; };
-  }, [choirId]);
+      .then(({ data }) => setChoir(data || null));
+  };
+
+  useEffect(() => { load(); }, [choirId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!choir?.slug) return null;
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(choir.slug); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
+  };
+
+  const regenerate = async () => {
+    setBusy(true); setError("");
+    const { error: err } = await supabase.rpc("regenerate_choir_code");
+    if (err) setError(err.message || "Could not generate a new code.");
+    else { load(); setConfirming(false); }
+    setBusy(false);
   };
 
   return (
@@ -4853,6 +4864,30 @@ function ChoirJoinCode({ choirId }) {
         </button>
       </div>
       <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Share this with anyone who wants to join. They enter it when they sign up.</div>
+
+      {!confirming ? (
+        <button
+          onClick={() => setConfirming(true)} className="dvbc-tap"
+          style={{ background: "none", border: "none", padding: 0, marginTop: 10, fontSize: 11, fontWeight: 700, color: C.roseDeep, textDecoration: "underline", cursor: "pointer" }}
+        >
+          Generate a new code
+        </button>
+      ) : (
+        <div style={{ marginTop: 12, padding: "10px 12px", background: C.roseBg, borderRadius: 10 }}>
+          <div style={{ fontSize: 11.5, color: C.roseDeep, marginBottom: 8 }}>
+            The old code "{choir.slug}" will stop working right away. Anyone who hasn't joined yet will need the new one.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={regenerate} disabled={busy} className="dvbc-tap" style={{ background: C.roseDeep, color: "#fff", fontWeight: 700, fontSize: 11.5, padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer" }}>
+              {busy ? "Generating…" : "Yes, generate new code"}
+            </button>
+            <button onClick={() => setConfirming(false)} disabled={busy} className="dvbc-tap" style={{ background: "none", color: C.inkSoft, fontWeight: 700, fontSize: 11.5, padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.lilacLine}`, cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <div style={{ fontSize: 11, color: C.roseDeep, marginTop: 8 }}>{error}</div>}
     </div>
   );
 }
