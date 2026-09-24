@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Home, CheckSquare, Music2, User, Search, Bell, Play, Pause, LogOut,
   ChevronLeft, Star, Mail, Lock, Eye, EyeOff, Clock, MapPin, AlertCircle, UserPlus, Camera, Users, ListMusic, FileText,
   Repeat, RotateCcw, RotateCw, X, Plus, Minus, Gauge, Download, WifiOff, MessageCircle, Phone, Trash2, Mic, Square,
-  PhoneOff, Video, VideoOff, MicOff, Megaphone } from "lucide-react";
+  PhoneOff, Video, VideoOff, MicOff, Megaphone, Shield } from "lucide-react";
 import logoImg from "./assets/logo.jpg";
 import photoImg from "./assets/chorale-photo.jpg";
 import photoImg2 from "./assets/chorale-photo-2.jpg";
@@ -4892,7 +4892,225 @@ function ChoirJoinCode({ choirId }) {
   );
 }
 
-function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo }) {
+// The Control Room: platform-owner view across every choir on ChoirKonnect.
+// Deliberately separate from any per-choir admin screen -- normal choir
+// admins never see this, and every action here calls a security-definer
+// function that checks is_platform_admin() on the server, not just here.
+function ControlRoom({ onBack }) {
+  const [choirs, setChoirs] = useState(null);
+  const [error, setError] = useState("");
+  const [openChoir, setOpenChoir] = useState(null); // the choir currently drilled into
+  const [members, setMembers] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [confirmDeleteText, setConfirmDeleteText] = useState("");
+  const [showAdmins, setShowAdmins] = useState(false);
+  const [admins, setAdmins] = useState(null);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminError, setAdminError] = useState("");
+
+  const loadChoirs = () => {
+    supabase.rpc("admin_list_choirs").then(({ data, error: err }) => {
+      if (err) setError(err.message || "Could not load choirs.");
+      else { setChoirs(data || []); setError(""); }
+    });
+  };
+  useEffect(loadChoirs, []);
+
+  const openChoirDetail = (choir) => {
+    setOpenChoir(choir);
+    setRenameValue(choir.name);
+    setConfirmDeleteText("");
+    setMembers(null);
+    supabase.rpc("admin_get_choir_members", { p_choir_id: choir.id }).then(({ data }) => setMembers(data || []));
+  };
+
+  const rename = async () => {
+    if (!openChoir || !renameValue.trim()) return;
+    setBusyId(openChoir.id);
+    const { error: err } = await supabase.rpc("admin_rename_choir", { p_choir_id: openChoir.id, p_name: renameValue.trim() });
+    if (!err) { setOpenChoir((c) => ({ ...c, name: renameValue.trim() })); loadChoirs(); }
+    else setError(err.message || "Could not rename.");
+    setBusyId(null);
+  };
+
+  const toggleAdmin = async (m) => {
+    setBusyId(m.id);
+    await supabase.rpc("admin_set_member_admin", { p_member_id: m.id, p_is_admin: !m.is_admin });
+    setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, is_admin: !x.is_admin } : x)));
+    setBusyId(null);
+  };
+
+  const toggleApproval = async (m) => {
+    const next = m.approval_status === "approved" ? "pending" : "approved";
+    setBusyId(m.id);
+    await supabase.rpc("admin_set_member_approval", { p_member_id: m.id, p_status: next });
+    setMembers((list) => list.map((x) => (x.id === m.id ? { ...x, approval_status: next } : x)));
+    setBusyId(null);
+  };
+
+  const removeMember = async (m) => {
+    setBusyId(m.id);
+    await supabase.rpc("admin_remove_member", { p_member_id: m.id });
+    setMembers((list) => list.filter((x) => x.id !== m.id));
+    loadChoirs();
+    setBusyId(null);
+  };
+
+  const deleteChoir = async () => {
+    if (!openChoir || confirmDeleteText.trim() !== openChoir.name) return;
+    setBusyId(openChoir.id);
+    const { error: err } = await supabase.rpc("admin_delete_choir", { p_choir_id: openChoir.id });
+    setBusyId(null);
+    if (err) { setError(err.message || "Could not delete."); return; }
+    setOpenChoir(null);
+    loadChoirs();
+  };
+
+  const loadAdmins = () => {
+    supabase.rpc("admin_list_platform_admins").then(({ data }) => setAdmins(data || []));
+  };
+  const addAdmin = async () => {
+    if (!newAdminEmail.trim()) return;
+    setAdminBusy(true); setAdminError("");
+    const { error: err } = await supabase.rpc("admin_add_platform_admin", { p_email: newAdminEmail.trim() });
+    if (err) setAdminError(err.message || "Could not add.");
+    else { setNewAdminEmail(""); loadAdmins(); }
+    setAdminBusy(false);
+  };
+  const removeAdmin = async (userId) => {
+    setAdminBusy(true);
+    await supabase.rpc("admin_remove_platform_admin", { p_user_id: userId });
+    loadAdmins();
+    setAdminBusy(false);
+  };
+
+  const card = { background: C.card, border: `1.4px solid ${C.lilacLine}`, borderRadius: 16, padding: 16, marginBottom: 12 };
+
+  return (
+    <div style={{ padding: "18px 20px 40px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+        <button onClick={onBack} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }} aria-label="Back">
+          <ChevronLeft size={22} color={C.ink} />
+        </button>
+        <Shield size={18} color={C.garnet} />
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: C.ink }}>Control Room</div>
+      </div>
+
+      {error && <div style={{ color: C.roseDeep, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+
+      {!openChoir && (
+        <>
+          <button
+            onClick={() => { setShowAdmins((v) => !v); if (!admins) loadAdmins(); }} className="dvbc-tap"
+            style={{ background: "none", border: `1px solid ${C.lilacLine}`, borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: C.inkSoft, cursor: "pointer", marginBottom: 14 }}
+          >
+            {showAdmins ? "Hide platform admins" : "Manage platform admins"}
+          </button>
+
+          {showAdmins && (
+            <div style={card}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Platform admins</div>
+              {(admins || []).map((a) => (
+                <div key={a.user_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderTop: `1px solid ${C.lilacLine}` }}>
+                  <div style={{ flex: 1, fontSize: 13, color: C.ink }}>{a.email}</div>
+                  <button onClick={() => removeAdmin(a.user_id)} disabled={adminBusy} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", color: C.roseDeep, fontSize: 11, fontWeight: 700 }}>Remove</button>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <input
+                  value={newAdminEmail} onChange={(e) => setNewAdminEmail(e.target.value)} placeholder="email of an existing account"
+                  style={{ flex: 1, border: `1.4px solid ${C.lilacLine}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5 }}
+                />
+                <button onClick={addAdmin} disabled={adminBusy} className="dvbc-tap" style={{ background: C.garnet, color: "#fff", fontWeight: 700, fontSize: 12, padding: "0 14px", borderRadius: 8, border: "none", cursor: "pointer" }}>Add</button>
+              </div>
+              {adminError && <div style={{ color: C.roseDeep, fontSize: 11.5, marginTop: 8 }}>{adminError}</div>}
+              <div style={{ fontSize: 10.5, color: C.inkSoft, marginTop: 8 }}>They must already have a ChoirKonnect account.</div>
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 10 }}>{choirs === null ? "Loading…" : `${choirs.length} choir${choirs.length === 1 ? "" : "s"}`}</div>
+          {(choirs || []).map((c) => (
+            <div key={c.id} onClick={() => openChoirDetail(c)} className="dvbc-tap" style={{ ...card, cursor: "pointer" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontWeight: 700, fontSize: 14.5, color: C.ink }}>{c.name}</div>
+                <ChevronLeft size={15} color={C.inkSoft} style={{ transform: "rotate(180deg)" }} />
+              </div>
+              <div style={{ fontSize: 11.5, color: C.inkSoft, marginTop: 4 }}>
+                Code: {c.slug} · {c.member_count} member{c.member_count === "1" ? "" : "s"}
+                {Number(c.pending_count) > 0 && <span style={{ color: C.roseDeep }}> · {c.pending_count} pending</span>}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {openChoir && (
+        <>
+          <button onClick={() => setOpenChoir(null)} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", color: C.plum, fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>
+            ← All choirs
+          </button>
+
+          <div style={card}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase", marginBottom: 6 }}>Choir name</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} style={{ flex: 1, border: `1.4px solid ${C.lilacLine}`, borderRadius: 8, padding: "8px 10px", fontSize: 13.5 }} />
+              <button onClick={rename} disabled={busyId === openChoir.id} className="dvbc-tap" style={{ background: C.plum, color: "#fff", fontWeight: 700, fontSize: 12, padding: "0 16px", borderRadius: 8, border: "none", cursor: "pointer" }}>Save</button>
+            </div>
+            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>Join code: {openChoir.slug}</div>
+          </div>
+
+          <div style={card}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Members</div>
+            {members === null && <div style={{ fontSize: 12, color: C.inkSoft }}>Loading…</div>}
+            {members && members.length === 0 && <div style={{ fontSize: 12, color: C.inkSoft }}>No members yet.</div>}
+            {(members || []).map((m) => (
+              <div key={m.id} style={{ padding: "9px 0", borderTop: `1px solid ${C.lilacLine}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{m.name} <span style={{ fontWeight: 400, color: C.inkSoft }}>· {m.part}</span></div>
+                    <div style={{ fontSize: 10.5, color: m.approval_status === "approved" ? C.sage : C.roseDeep }}>
+                      {m.approval_status}{m.is_admin ? " · admin" : ""}
+                    </div>
+                  </div>
+                  <button onClick={() => toggleApproval(m)} disabled={busyId === m.id} className="dvbc-tap" style={{ background: "none", border: `1px solid ${C.lilacLine}`, borderRadius: 8, padding: "5px 10px", fontSize: 10.5, fontWeight: 700, color: C.inkSoft, cursor: "pointer" }}>
+                    {m.approval_status === "approved" ? "Set pending" : "Approve"}
+                  </button>
+                  <button onClick={() => toggleAdmin(m)} disabled={busyId === m.id} className="dvbc-tap" style={{ background: "none", border: `1px solid ${C.lilacLine}`, borderRadius: 8, padding: "5px 10px", fontSize: 10.5, fontWeight: 700, color: C.inkSoft, cursor: "pointer" }}>
+                    {m.is_admin ? "Remove admin" : "Make admin"}
+                  </button>
+                  <button onClick={() => removeMember(m)} disabled={busyId === m.id} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }} aria-label="Remove member">
+                    <Trash2 size={14} color={C.roseDeep} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ ...card, borderColor: C.roseDeep }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: C.roseDeep, marginBottom: 6 }}>Danger zone</div>
+            <div style={{ fontSize: 11.5, color: C.inkSoft, marginBottom: 10 }}>
+              Deletes {openChoir.name} completely -- its members, songs, rehearsals, chats and history. This cannot be undone.
+              Type the choir's name to confirm: <b>{openChoir.name}</b>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={confirmDeleteText} onChange={(e) => setConfirmDeleteText(e.target.value)} style={{ flex: 1, border: `1.4px solid ${C.lilacLine}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5 }} />
+              <button
+                onClick={deleteChoir} disabled={confirmDeleteText.trim() !== openChoir.name || busyId === openChoir.id} className="dvbc-tap"
+                style={{ background: C.roseDeep, color: "#fff", fontWeight: 700, fontSize: 12, padding: "0 16px", borderRadius: 8, border: "none", cursor: confirmDeleteText.trim() === openChoir.name ? "pointer" : "default", opacity: confirmDeleteText.trim() === openChoir.name ? 1 : 0.5 }}
+              >
+                Delete choir
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo, isPlatformAdmin }) {
   const displayName = profile?.name || "Member";
   const pending = members.filter((m) => m.approval_status === "pending");
   const approvedMembers = members.filter((m) => m.approval_status === "approved");
@@ -5084,6 +5302,20 @@ function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onR
             <ChevronLeft size={16} color={C.inkSoft} style={{ transform: "rotate(180deg)" }} />
           </div>
         ))}
+
+        {isPlatformAdmin && (
+          <div
+            onClick={() => onNavSettings?.("control-room")} className="dvbc-tap"
+            style={{ display: "flex", alignItems: "center", gap: 10, background: C.garnet, color: "#fff", borderRadius: 14, padding: "14px 16px", margin: "20px 0 4px", cursor: "pointer" }}
+          >
+            <Shield size={18} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 13.5 }}>Control Room</div>
+              <div style={{ fontSize: 11, opacity: 0.85 }}>View and manage every choir on ChoirKonnect</div>
+            </div>
+            <ChevronLeft size={16} style={{ transform: "rotate(180deg)" }} />
+          </div>
+        )}
 
         {isAdmin && (
           <>
@@ -8408,6 +8640,7 @@ export default function App() {
   const [session, setSession] = useState(undefined); // undefined = checking, null = logged out
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [darkMode, setDarkMode] = useState(() => store.get("dvbc-dark-mode", false));
   const [, forceThemeRerender] = useState(0);
   useEffect(() => {
@@ -8552,6 +8785,11 @@ export default function App() {
       .eq("user_id", session.user.id)
       .single()
       .then(({ data }) => setProfile(data || null));
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) { setIsPlatformAdmin(false); return; }
+    supabase.rpc("is_platform_admin").then(({ data }) => setIsPlatformAdmin(!!data));
   }, [session]);
 
   useEffect(() => {
@@ -9289,6 +9527,7 @@ export default function App() {
 else if (screen === "notation") content = <NotationFlashcards onBack={() => setScreen("dashboard")} />;
   else if (screen === "privacy") content = <StaticPage title="Privacy Policy" content={PRIVACY_POLICY_TEXT} onBack={() => setScreen("profile")} />;
   else if (screen === "about") content = <StaticPage title="About Us" content={ABOUT_TEXT} onBack={() => setScreen("profile")} />;
+  else if (screen === "control-room") content = <ControlRoom onBack={() => setScreen("profile")} />;
   else if (screen === "profile") content = (
     <Profile profile={profile} members={members} onLogout={logout} isAdmin={isAdmin}
       onApprove={approveMember} onReject={rejectMember} onUploadAvatar={uploadAvatar}
@@ -9298,6 +9537,7 @@ else if (screen === "notation") content = <NotationFlashcards onBack={() => setS
       soundEnabled={soundEnabled} onToggleSound={() => setSoundEnabled((v) => !v)}
       pushSubscribed={pushSubscribed} pushBusy={pushBusy} onEnablePush={enablePush} onDisablePush={disablePush}
       isIOS={isIOS} isStandalone={isStandalone} onUpdateOwnInfo={updateOwnInfo}
+      isPlatformAdmin={isPlatformAdmin}
       onNavSettings={(nav) => setScreen(nav)} />
   );
 
