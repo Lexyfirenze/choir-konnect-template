@@ -1125,7 +1125,7 @@ function ResetPasswordScreen({ onDone }) {
   );
 }
 
-function PendingApproval({ profile, onLogout, choirName }) {
+function PendingApproval({ profile, onLogout, choirName, choirLogo }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <div style={{ background: gradient(), padding: "calc(env(safe-area-inset-top, 0px) + 40px) 32px 30px", textAlign: "center", flexShrink: 0 }}>
@@ -1135,7 +1135,7 @@ function PendingApproval({ profile, onLogout, choirName }) {
             display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: "0 8px 24px rgba(0,0,0,0.25)", overflow: "hidden",
           }}>
-            <img src={logoImg} alt="logo" style={{ width: "88%", height: "88%", objectFit: "contain" }} />
+            <img src={choirLogo || logoImg} alt="logo" style={{ width: "88%", height: "88%", objectFit: "contain" }} />
           </div>
         </div>
         <div style={{ color: "#fff", fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600 }}>
@@ -1562,7 +1562,7 @@ function TonightsPieces({ event, pieces = [], fallbackPiece, onNav, refreshTick 
   );
 }
 
-function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitPost, onNav, unreadCount = 0, onCheckIn, checkingIn, checkInError, choirName }) {
+function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitPost, onNav, unreadCount = 0, onCheckIn, checkingIn, checkInError, choirName, choirLogo }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning," : hour < 18 ? "Good afternoon," : "Good evening,";
   const displayName = profile?.name ? profile.name.split(" ")[0] : "Member";
@@ -1682,7 +1682,7 @@ function Dashboard({ profile, members, events, posts, pieces, isAdmin, onSubmitP
             width: 30, height: 30, borderRadius: 9, overflow: "hidden", flexShrink: 0,
             border: `1.5px solid ${C.lilac}`, background: "#fff",
           }}>
-            <img src={logoImg} alt={choirName || "Choir logo"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={choirLogo || logoImg} alt={choirName || "Choir logo"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <div>
           </div>
@@ -2071,6 +2071,82 @@ function PracticeActivity({ members = [] }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Lets an admin set their choir's own logo and accent color. A curated set
+// of swatches (not a raw color picker) so every choir still looks coherent
+// with the rest of the app, whatever they pick.
+const ACCENT_SWATCHES = [
+  { name: "Teal", hex: "#14B8A6" }, { name: "Garnet", hex: "#B23368" }, { name: "Plum", hex: "#7A56D6" },
+  { name: "Sky", hex: "#2E6FA0" }, { name: "Amber", hex: "#B8860B" }, { name: "Forest", hex: "#3E7A50" },
+  { name: "Coral", hex: "#D9705B" }, { name: "Slate", hex: "#4B6670" },
+];
+
+function ChoirBranding({ choirId, onUploadLogo }) {
+  const [logoUrl, setLogoUrl] = useState("");
+  const [accent, setAccent] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [savingAccent, setSavingAccent] = useState("");
+
+  const load = () => {
+    if (!choirId) return;
+    supabase.from("choirs").select("logo_url, theme_colors").eq("id", choirId).single()
+      .then(({ data }) => { setLogoUrl(data?.logo_url || ""); setAccent(data?.theme_colors?.accent || ""); });
+  };
+  useEffect(load, [choirId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true); setError("");
+    const { url, error: err } = await onUploadLogo(file);
+    if (err) setError(err); else setLogoUrl(url);
+    setUploading(false);
+  };
+
+  const pickAccent = async (hex) => {
+    setSavingAccent(hex); setError("");
+    const { error: err } = await supabase.from("choirs").update({ theme_colors: { accent: hex } }).eq("id", choirId);
+    if (err) setError(err.message || "Could not save that color.");
+    else setAccent(hex);
+    setSavingAccent("");
+  };
+
+  return (
+    <div style={{ background: "#fff", border: `1.4px solid ${C.lilacLine}`, borderRadius: 16, padding: "16px 18px", margin: "16px 0 10px" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase", marginBottom: 10 }}>Choir branding</div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+        <div style={{ width: 56, height: 56, borderRadius: 14, overflow: "hidden", background: C.lilacSoft, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {logoUrl ? <img src={logoUrl} alt="Choir logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Users size={22} color={C.inkSoft} />}
+        </div>
+        <label className="dvbc-tap" style={{ background: C.lilacSoft, color: C.plum, fontWeight: 700, fontSize: 12, padding: "9px 16px", borderRadius: 10, cursor: "pointer" }}>
+          {uploading ? "Uploading…" : logoUrl ? "Change logo" : "Upload a logo"}
+          <input type="file" accept="image/*" onChange={onFile} style={{ display: "none" }} />
+        </label>
+      </div>
+
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase", marginBottom: 8 }}>Accent color</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {ACCENT_SWATCHES.map((s) => (
+          <button
+            key={s.hex} onClick={() => pickAccent(s.hex)} disabled={!!savingAccent} className="dvbc-tap"
+            title={s.name} aria-label={s.name}
+            style={{
+              width: 32, height: 32, borderRadius: "50%", background: s.hex, cursor: "pointer",
+              border: accent === s.hex ? `3px solid ${C.ink}` : "3px solid transparent",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.2)", opacity: savingAccent && savingAccent !== s.hex ? 0.5 : 1,
+            }}
+          />
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 8 }}>This changes the app's main button and highlight color for everyone in your choir.</div>
+
+      {error && <div style={{ fontSize: 11, color: C.roseDeep, marginTop: 8 }}>{error}</div>}
     </div>
   );
 }
@@ -5114,7 +5190,7 @@ function ControlRoom({ onBack }) {
   );
 }
 
-function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo, isPlatformAdmin, choirName }) {
+function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo, isPlatformAdmin, choirName, onUploadChoirLogo }) {
   const displayName = profile?.name || "Member";
   const pending = members.filter((m) => m.approval_status === "pending");
   const approvedMembers = members.filter((m) => m.approval_status === "approved");
@@ -5323,6 +5399,7 @@ function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onR
 
         {isAdmin && (
           <>
+            <ChoirBranding choirId={profile?.choir_id} onUploadLogo={onUploadChoirLogo} />
             <ChoirJoinCode choirId={profile?.choir_id} />
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: C.ink, margin: "24px 0 10px", display: "flex", alignItems: "center", gap: 8 }}>
               Pending Approvals
@@ -8646,16 +8723,23 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [currentChoirName, setCurrentChoirName] = useState("");
+  const [currentChoirLogo, setCurrentChoirLogo] = useState("");
+  const [currentChoirAccent, setCurrentChoirAccent] = useState("");
   const [darkMode, setDarkMode] = useState(() => store.get("dvbc-dark-mode", false));
   const [, forceThemeRerender] = useState(0);
+  // One single place applies the theme: light/dark first, then the choir's
+  // own accent color layered on top if they've set one. Keeping this as one
+  // effect (rather than two separate ones) means toggling dark mode can
+  // never accidentally wipe out the choir's accent, or vice versa.
   useEffect(() => {
     applyTheme(darkMode ? "dark" : "light");
+    if (currentChoirAccent) { C.plum = currentChoirAccent; C.accent = currentChoirAccent; }
     store.set("dvbc-dark-mode", darkMode);
     // C is mutated in place (not React state), so components that already rendered
     // this pass are still holding stale color values. Force one more render now
     // that C reflects the new theme, so the switch applies instantly.
     forceThemeRerender((n) => n + 1);
-  }, [darkMode]);
+  }, [darkMode, currentChoirAccent]);
   const [soundEnabled, setSoundEnabled] = useState(() => store.get("dvbc-sound-enabled", true));
   useEffect(() => { store.set("dvbc-sound-enabled", soundEnabled); }, [soundEnabled]);
 
@@ -8798,10 +8882,15 @@ export default function App() {
   }, [session]);
 
   useEffect(() => {
-    if (!profile?.choir_id) { setCurrentChoirName(""); return; }
+    if (!profile?.choir_id) { setCurrentChoirName(""); setCurrentChoirLogo(""); setCurrentChoirAccent(""); return; }
     let active = true;
-    supabase.from("choirs").select("name").eq("id", profile.choir_id).single()
-      .then(({ data }) => { if (active) setCurrentChoirName(data?.name || ""); });
+    supabase.from("choirs").select("name, logo_url, theme_colors").eq("id", profile.choir_id).single()
+      .then(({ data }) => {
+        if (!active) return;
+        setCurrentChoirName(data?.name || "");
+        setCurrentChoirLogo(data?.logo_url || "");
+        setCurrentChoirAccent(data?.theme_colors?.accent || "");
+      });
     return () => { active = false; };
   }, [profile?.choir_id]);
 
@@ -9287,6 +9376,20 @@ export default function App() {
     return { url: data.publicUrl };
   }, [profile]);
 
+  const uploadChoirLogo = useCallback(async (file) => {
+    if (!profile?.choir_id) return { error: "Not signed in" };
+    if (!file.type.startsWith("image/")) return { error: "Please choose an image file." };
+    if (file.size > 3 * 1024 * 1024) return { error: "Logo must be under 3MB." };
+    const ext = (file.name.split(".").pop() || "png").toLowerCase();
+    const path = `${profile.choir_id}/logo-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("choir-logos").upload(path, file, { contentType: file.type });
+    if (uploadError) return { error: uploadError.message };
+    const { data } = supabase.storage.from("choir-logos").getPublicUrl(path);
+    const { error: dbError } = await supabase.from("choirs").update({ logo_url: data.publicUrl }).eq("id", profile.choir_id);
+    if (dbError) return { error: dbError.message };
+    return { url: data.publicUrl };
+  }, [profile]);
+
   const uploadLibraryPdf = useCallback(async (file) => {
     if (!profile) return { error: "Not signed in" };
     const ext = (file.name.split(".").pop() || "").toLowerCase();
@@ -9486,7 +9589,7 @@ export default function App() {
     return (
       <div style={{ minHeight: "100vh", background: C.parchment, fontFamily: "'Outfit', system-ui, sans-serif" }}>
         <style>{TAP_STYLES}</style>
-        <PendingApproval profile={profile} onLogout={logout} choirName={currentChoirName} />
+        <PendingApproval profile={profile} onLogout={logout} choirName={currentChoirName} choirLogo={currentChoirLogo} />
       </div>
     );
   }
@@ -9496,7 +9599,7 @@ export default function App() {
   if (screen === "dashboard") content = (
     <Dashboard profile={profile} members={members} events={events} posts={posts} pieces={libraryPieces} isAdmin={isAdmin} onSubmitPost={submitPost} onNav={setScreen}
       unreadCount={unreadPostCount} onCheckIn={checkInToEvent}
-      checkingIn={checkingIn} checkInError={checkInError} choirName={currentChoirName} />
+      checkingIn={checkingIn} checkInError={checkInError} choirName={currentChoirName} choirLogo={currentChoirLogo} />
   );
   else if (screen === "attendance") content = (
     <Attendance members={members} loading={loadingMembers} isAdmin={isAdmin} profile={profile}
@@ -9550,7 +9653,7 @@ else if (screen === "notation") content = <NotationFlashcards onBack={() => setS
       soundEnabled={soundEnabled} onToggleSound={() => setSoundEnabled((v) => !v)}
       pushSubscribed={pushSubscribed} pushBusy={pushBusy} onEnablePush={enablePush} onDisablePush={disablePush}
       isIOS={isIOS} isStandalone={isStandalone} onUpdateOwnInfo={updateOwnInfo}
-      isPlatformAdmin={isPlatformAdmin} choirName={currentChoirName}
+      isPlatformAdmin={isPlatformAdmin} choirName={currentChoirName} onUploadChoirLogo={uploadChoirLogo}
       onNavSettings={(nav) => setScreen(nav)} />
   );
 
