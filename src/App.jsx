@@ -5065,7 +5065,7 @@ function ChoirJoinCode({ choirId }) {
 // Deliberately separate from any per-choir admin screen -- normal choir
 // admins never see this, and every action here calls a security-definer
 // function that checks is_platform_admin() on the server, not just here.
-function ControlRoom({ onBack }) {
+function ControlRoom({ onBack, standalone, onLogout, onOpenChoir }) {
   const [choirs, setChoirs] = useState(null);
   const [error, setError] = useState("");
   const [openChoir, setOpenChoir] = useState(null); // the choir currently drilled into
@@ -5159,12 +5159,24 @@ function ControlRoom({ onBack }) {
 
   return (
     <div style={{ padding: "18px 20px 40px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-        <button onClick={onBack} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }} aria-label="Back">
-          <ChevronLeft size={22} color={C.ink} />
-        </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+        {!standalone && (
+          <button onClick={onBack} className="dvbc-tap" style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }} aria-label="Back">
+            <ChevronLeft size={22} color={C.ink} />
+          </button>
+        )}
         <Shield size={18} color={C.garnet} />
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: C.ink }}>Control Room</div>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: C.ink, flex: 1 }}>ChoirKonnect Control Room</div>
+        {standalone && onOpenChoir && (
+          <button onClick={onOpenChoir} className="dvbc-tap" style={{ background: "none", border: `1px solid ${C.lilacLine}`, borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: C.inkSoft, cursor: "pointer" }}>
+            Open my choir
+          </button>
+        )}
+        {standalone && (
+          <button onClick={onLogout} className="dvbc-tap" style={{ background: "none", border: `1px solid ${C.lilacLine}`, borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: C.roseDeep, cursor: "pointer" }}>
+            Sign out
+          </button>
+        )}
       </div>
 
       {error && <div style={{ color: C.roseDeep, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
@@ -5279,7 +5291,7 @@ function ControlRoom({ onBack }) {
   );
 }
 
-function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo, isPlatformAdmin, choirName, onUploadChoirLogo }) {
+function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onRemoveMember, onToggleAdmin, onUploadAvatar, avatarUploading, avatarError, onNavSettings, darkMode, onToggleDarkMode, soundEnabled, onToggleSound, pushSubscribed, pushBusy, onEnablePush, onDisablePush, isIOS, isStandalone, onUpdateOwnInfo, isPlatformAdmin, onOpenControlRoom, choirName, onUploadChoirLogo }) {
   const displayName = profile?.name || "Member";
   const pending = members.filter((m) => m.approval_status === "pending");
   const approvedMembers = members.filter((m) => m.approval_status === "approved");
@@ -5474,7 +5486,7 @@ function Profile({ profile, members, onLogout, isAdmin, onApprove, onReject, onR
 
         {isPlatformAdmin && (
           <div
-            onClick={() => onNavSettings?.("control-room")} className="dvbc-tap"
+            onClick={() => onOpenControlRoom?.()} className="dvbc-tap"
             style={{ display: "flex", alignItems: "center", gap: 10, background: C.garnet, color: "#fff", borderRadius: 14, padding: "14px 16px", margin: "20px 0 4px", cursor: "pointer" }}
           >
             <Shield size={18} />
@@ -8813,6 +8825,8 @@ export default function App() {
   const [profileReloadTick, setProfileReloadTick] = useState(0); // bump to re-check after finishing setup
   const [profileChecked, setProfileChecked] = useState(false); // true once we know whether this account has a member row
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [platformChecked, setPlatformChecked] = useState(false); // true once we know whether this account is a platform admin
+  const [appMode, setAppMode] = useState("control"); // for platform admins: "control" = Control Room only, "choir" = their own choir's app
   const [currentChoirName, setCurrentChoirName] = useState("");
   const [currentChoirLogo, setCurrentChoirLogo] = useState("");
   const [currentChoirAccent, setCurrentChoirAccent] = useState("");
@@ -8969,8 +8983,9 @@ export default function App() {
   }, [session, profileReloadTick]);
 
   useEffect(() => {
-    if (!session) { setIsPlatformAdmin(false); return; }
-    supabase.rpc("is_platform_admin").then(({ data }) => setIsPlatformAdmin(!!data));
+    if (!session) { setIsPlatformAdmin(false); setPlatformChecked(false); setAppMode("control"); return; }
+    setPlatformChecked(false);
+    supabase.rpc("is_platform_admin").then(({ data }) => { setIsPlatformAdmin(!!data); setPlatformChecked(true); });
   }, [session]);
 
   useEffect(() => {
@@ -9669,6 +9684,28 @@ export default function App() {
     );
   }
 
+  if (!platformChecked) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.parchment }}>
+        <BrandSpinner label="Signing you in…" />
+      </div>
+    );
+  }
+
+  // Platform admins land in the Control Room on its own -- no choir screens,
+  // no need to belong to a choir. If the same account also belongs to a choir,
+  // a link lets them step into that choir's app and back.
+  if (isPlatformAdmin && appMode === "control") {
+    return (
+      <div style={{ minHeight: "100vh", background: C.parchment, fontFamily: "'Outfit', system-ui, sans-serif" }}>
+        <style>{TAP_STYLES}</style>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <ControlRoom standalone onLogout={logout} onOpenChoir={profile ? () => { setScreen("dashboard"); setAppMode("choir"); } : null} />
+        </div>
+      </div>
+    );
+  }
+
   if (!profile && !profileChecked) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.parchment }}>
@@ -9744,7 +9781,6 @@ export default function App() {
 else if (screen === "notation") content = <NotationFlashcards onBack={() => setScreen("dashboard")} />;
   else if (screen === "privacy") content = <StaticPage title="Privacy Policy" content={PRIVACY_POLICY_TEXT} onBack={() => setScreen("profile")} />;
   else if (screen === "about") content = <StaticPage title="About Us" content={ABOUT_TEXT} onBack={() => setScreen("profile")} />;
-  else if (screen === "control-room") content = <ControlRoom onBack={() => setScreen("profile")} />;
   else if (screen === "profile") content = (
     <Profile profile={profile} members={members} onLogout={logout} isAdmin={isAdmin}
       onApprove={approveMember} onReject={rejectMember} onUploadAvatar={uploadAvatar}
@@ -9754,7 +9790,7 @@ else if (screen === "notation") content = <NotationFlashcards onBack={() => setS
       soundEnabled={soundEnabled} onToggleSound={() => setSoundEnabled((v) => !v)}
       pushSubscribed={pushSubscribed} pushBusy={pushBusy} onEnablePush={enablePush} onDisablePush={disablePush}
       isIOS={isIOS} isStandalone={isStandalone} onUpdateOwnInfo={updateOwnInfo}
-      isPlatformAdmin={isPlatformAdmin} choirName={currentChoirName} onUploadChoirLogo={uploadChoirLogo}
+      isPlatformAdmin={isPlatformAdmin} onOpenControlRoom={() => setAppMode("control")} choirName={currentChoirName} onUploadChoirLogo={uploadChoirLogo}
       onNavSettings={(nav) => setScreen(nav)} />
   );
 
