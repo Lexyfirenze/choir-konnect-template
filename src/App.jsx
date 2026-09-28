@@ -1125,6 +1125,95 @@ function ResetPasswordScreen({ onDone }) {
   );
 }
 
+// Shown when someone is signed in but has no choir yet -- for example, they
+// typed a wrong join code while registering. Lets them finish, instead of
+// being stuck on a loading spinner forever.
+function FinishSetup({ onDone, onLogout }) {
+  const [action, setAction] = useState("join");
+  const [name, setName] = useState("");
+  const [part, setPart] = useState(VOICE_PARTS[0]);
+  const [code, setCode] = useState("");
+  const [choirName, setChoirName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) { setError("Enter your name."); return; }
+    if (action === "join" && !code.trim()) { setError("Enter your choir's join code."); return; }
+    if (action === "create" && !choirName.trim()) { setError("Enter a name for your choir."); return; }
+    setBusy(true);
+    const { error: err } = action === "create"
+      ? await supabase.rpc("create_choir", { p_choir_name: choirName.trim(), p_member_name: name.trim(), p_part: part })
+      : await supabase.rpc("join_choir", { p_code: code.trim(), p_member_name: name.trim(), p_part: part });
+    setBusy(false);
+    if (err) { setError(err.message || "Something went wrong. Please try again."); return; }
+    onDone();
+  };
+
+  const field = { display: "flex", alignItems: "center", gap: 8, border: `1.4px solid ${C.lilacLine}`, background: "#fff", borderRadius: 12, padding: "12px 14px", margin: "6px 0 16px" };
+  const label = { fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: C.inkSoft, textTransform: "uppercase" };
+  const tab = (on) => ({ flex: 1, padding: "10px 0", borderRadius: 10, fontSize: 12.5, fontWeight: 700, border: `1.4px solid ${on ? C.accent : C.lilacLine}`, background: on ? C.accent : "#fff", color: on ? "#fff" : C.inkSoft, cursor: "pointer" });
+
+  return (
+    <div style={{ maxWidth: 420, margin: "0 auto", padding: "48px 24px" }}>
+      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: C.ink, marginBottom: 6 }}>One last step</div>
+      <div style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.5, marginBottom: 24 }}>
+        Your account is ready, but it isn't part of a choir yet. Join one with its code, or start your own.
+      </div>
+
+      <form onSubmit={submit}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <button type="button" className="dvbc-tap" onClick={() => setAction("join")} style={tab(action === "join")}>Join with a code</button>
+          <button type="button" className="dvbc-tap" onClick={() => setAction("create")} style={tab(action === "create")}>Start a new choir</button>
+        </div>
+
+        <label style={label}>Your name</label>
+        <div style={field}>
+          <User size={16} color={C.inkSoft} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" style={{ border: "none", outline: "none", fontSize: 13.5, flex: 1, background: "transparent", color: C.ink }} />
+        </div>
+
+        <label style={label}>Voice part</label>
+        <div style={{ ...field, padding: "4px 14px" }}>
+          <select value={part} onChange={(e) => setPart(e.target.value)} style={{ border: "none", outline: "none", fontSize: 13.5, flex: 1, background: "transparent", color: C.ink, padding: "10px 0" }}>
+            {VOICE_PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+
+        {action === "join" ? (
+          <>
+            <label style={label}>Choir join code</label>
+            <div style={field}>
+              <Users size={16} color={C.inkSoft} />
+              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ask your director for this" style={{ border: "none", outline: "none", fontSize: 13.5, flex: 1, background: "transparent", color: C.ink }} />
+            </div>
+          </>
+        ) : (
+          <>
+            <label style={label}>Choir name</label>
+            <div style={field}>
+              <Users size={16} color={C.inkSoft} />
+              <input value={choirName} onChange={(e) => setChoirName(e.target.value)} placeholder="e.g. St. Cecilia Choir" style={{ border: "none", outline: "none", fontSize: 13.5, flex: 1, background: "transparent", color: C.ink }} />
+            </div>
+          </>
+        )}
+
+        {error && <div style={{ color: C.roseDeep, fontSize: 12.5, marginBottom: 14 }}>{error}</div>}
+
+        <button type="submit" disabled={busy} className="dvbc-tap" style={{ width: "100%", background: gradient(), color: "#fff", fontWeight: 600, fontSize: 15, padding: 16, borderRadius: 14, border: "none", cursor: "pointer", opacity: busy ? 0.7 : 1 }}>
+          {busy ? "Please wait…" : action === "create" ? "Create my choir" : "Join choir"}
+        </button>
+      </form>
+
+      <button onClick={onLogout} className="dvbc-tap" style={{ display: "block", margin: "22px auto 0", background: "none", border: "none", color: C.inkSoft, fontSize: 12.5, cursor: "pointer", textDecoration: "underline" }}>
+        Sign out
+      </button>
+    </div>
+  );
+}
+
 function PendingApproval({ profile, onLogout, choirName, choirLogo }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
@@ -8721,6 +8810,8 @@ export default function App() {
   const [session, setSession] = useState(undefined); // undefined = checking, null = logged out
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [profileReloadTick, setProfileReloadTick] = useState(0); // bump to re-check after finishing setup
+  const [profileChecked, setProfileChecked] = useState(false); // true once we know whether this account has a member row
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [currentChoirName, setCurrentChoirName] = useState("");
   const [currentChoirLogo, setCurrentChoirLogo] = useState("");
@@ -8867,14 +8958,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!session) { setProfile(null); return; }
+    if (!session) { setProfile(null); setProfileChecked(false); return; }
+    setProfileChecked(false);
     supabase
       .from("members")
       .select("*")
       .eq("user_id", session.user.id)
-      .single()
-      .then(({ data }) => setProfile(data || null));
-  }, [session]);
+      .maybeSingle()
+      .then(({ data }) => { setProfile(data || null); setProfileChecked(true); });
+  }, [session, profileReloadTick]);
 
   useEffect(() => {
     if (!session) { setIsPlatformAdmin(false); return; }
@@ -9577,10 +9669,19 @@ export default function App() {
     );
   }
 
-  if (!profile) {
+  if (!profile && !profileChecked) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.parchment }}>
         <BrandSpinner label="Loading your profile…" />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.parchment, fontFamily: "'Outfit', system-ui, sans-serif" }}>
+        <style>{TAP_STYLES}</style>
+        <FinishSetup onDone={() => setProfileReloadTick((n) => n + 1)} onLogout={logout} />
       </div>
     );
   }
