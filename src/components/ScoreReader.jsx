@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Upload } from "lucide-react";
-import { parseMusicXml, readScoreFile, readScoreUrl, ScorePlayer, sampleScoreXml, guessMyTrackId, buildSolfa } from "../lib/scoreEngine";
+import { parseMusicXml, readScoreFile, readScoreUrl, ScorePlayer, sampleScoreXml, guessMyTrackId, buildSolfa, printableSolfaHtml } from "../lib/scoreEngine";
 
 const fmtTime = (s) => {
   const t = Math.max(0, Math.round(s));
@@ -11,7 +11,7 @@ const RATES = [0.5, 0.75, 1, 1.25];
 
 // Score reader: opens a MusicXML file, draws the sheet music (OpenSheetMusicDisplay),
 // and plays it back with a part selector so a singer can hear their own line louder.
-export default function ScoreReader({ C, gradient, myPart, initialUrl, initialView }) {
+export default function ScoreReader({ C, gradient, myPart, initialUrl, initialView, choirName }) {
   const [score, setScore] = useState(null);
   const [xml, setXml] = useState("");
   const [error, setError] = useState("");
@@ -255,6 +255,19 @@ export default function ScoreReader({ C, gradient, myPart, initialUrl, initialVi
     } catch { /* clipboard blocked */ }
   };
 
+  const printSolfa = () => {
+    if (!solfa || !score) return;
+    // A printed page is wider than a phone screen, so lay it out at 4 bars
+    // per line regardless of what the on-screen view is currently set to.
+    const printSolfaData = buildSolfa(score, 4);
+    const title = choirName ? `${choirName} – ${score.title}` : score.title;
+    const html = printableSolfaHtml(score, printSolfaData, title);
+    const win = window.open("", "_blank");
+    if (!win) { setError("Please allow pop-ups to print, then try again."); return; }
+    win.document.write(html);
+    win.document.close();
+  };
+
   /* ---------- styles ---------- */
   const card = { background: C.card, border: `1.4px solid ${C.lilacLine}`, borderRadius: 16, padding: 14, marginBottom: 12 };
   const chip = (active) => ({
@@ -399,7 +412,8 @@ export default function ScoreReader({ C, gradient, myPart, initialUrl, initialVi
                 {[1, 2, 3, 4].map((n) => (
                   <button key={n} onClick={() => setBarsPerLine(n)} className="dvbc-tap" style={{ ...chip(barsPerLine === n), padding: "5px 11px" }}>{n}</button>
                 ))}
-                <button onClick={copySolfa} className="dvbc-tap" style={{ ...chip(false), padding: "5px 12px", marginLeft: "auto" }}>{copied ? "Copied" : "Copy text"}</button>
+                <button onClick={printSolfa} className="dvbc-tap" style={{ ...chip(false), padding: "5px 12px", marginLeft: "auto" }}>Print</button>
+                <button onClick={copySolfa} className="dvbc-tap" style={{ ...chip(false), padding: "5px 12px" }}>{copied ? "Copied" : "Copy text"}</button>
               </div>
               <div
                 style={{

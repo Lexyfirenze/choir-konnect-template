@@ -640,3 +640,47 @@ export function buildSolfa(score, barsPerLine = 4) {
 
   return { systems, plain };
 }
+
+// ---------------------------------------------------------------------------
+// A printable solfa sheet: a clean, full-width HTML page (no app chrome,
+// no colors that waste ink) meant to be opened in a new tab and printed or
+// saved as a PDF from the browser's own print dialog.
+// ---------------------------------------------------------------------------
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+export function printableSolfaHtml(score, solfa, title) {
+  const heading = escapeHtml(title || score.title || "Solfa sheet");
+  const systemsHtml = solfa.systems.map((sys) => {
+    const lines = sys.lines.map((ln) => {
+      const bars = ln.bars.map((b) => `<span class="bar">| ${escapeHtml(b.text)} </span>`).join("");
+      return `<div class="line"><span class="label">${escapeHtml(ln.label)}</span>${bars}<span class="close">${ln.last ? "||" : "|"}</span></div>`;
+    }).join("");
+    return `<div class="system"><div class="barhead">Bar ${sys.startNum} &middot; ${escapeHtml(sys.keyLabel)}</div>${lines}</div>`;
+  }).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${heading} - Solfa</title>
+<style>
+  @page { margin: 14mm; }
+  body { font-family: Georgia, 'Times New Roman', serif; color: #111; margin: 0; padding: 16px 20px 40px; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { font-size: 11px; color: #555; margin-bottom: 18px; }
+  .system { margin-bottom: 16px; break-inside: avoid; }
+  .barhead { font-family: Arial, sans-serif; font-size: 10px; color: #666; margin-bottom: 2px; }
+  .line { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.7; white-space: pre; }
+  .label { font-weight: 700; display: inline-block; width: 2.4ch; }
+  .bar { }
+  .close { }
+  footer { margin-top: 28px; font-family: Arial, sans-serif; font-size: 10px; color: #888; }
+  @media print { footer { position: fixed; bottom: 6mm; } }
+</style></head>
+<body>
+  <h1>${heading}</h1>
+  <div class="sub">Tonic sol-fa &middot; movable doh &middot; printed from ChoirKonnect</div>
+  ${systemsHtml}
+  <footer>${heading} &middot; printed ${new Date().toLocaleDateString()}</footer>
+  <script>window.onload = () => setTimeout(() => window.print(), 200);</script>
+</body></html>`;
+}

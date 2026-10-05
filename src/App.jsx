@@ -3331,7 +3331,7 @@ function LibraryFormPanel({ initial, onCancel, onSave, onUploadAudio, onUploadNo
   );
 }
 
-function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate, onUpdate, onDelete, onUploadAudio, onUploadNotation, onUploadPdf, myPart }) {
+function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate, onUpdate, onDelete, onUploadAudio, onUploadNotation, onUploadPdf, myPart, choirName }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const parts = ["All", "Soprano", "Alto", "Tenor", "Bass"];
@@ -3563,7 +3563,7 @@ function Library({ favorites, toggleFavorite, isAdmin, pieces, loading, onCreate
                 <X size={15} color={C.inkSoft} />
               </button>
             </div>
-            <ScoreReader C={C} gradient={gradient} myPart={myPart} initialUrl={scorePiece.notation_xml_url} />
+            <ScoreReader C={C} gradient={gradient} myPart={myPart} initialUrl={scorePiece.notation_xml_url} choirName={choirName} />
           </div>
         </div>
       )}
@@ -7591,7 +7591,7 @@ function PracticeLists({ isAdmin, profile, members = [] }) {
 
       {view === "tools" && <PracticeTools />}
 
-      {view === "score" && <ScoreReader C={C} gradient={gradient} myPart={profile?.part} />}
+      {view === "score" && <ScoreReader C={C} gradient={gradient} myPart={profile?.part} choirName={currentChoirName} />}
     </div>
   );
 }
@@ -9753,6 +9753,7 @@ export default function App() {
       pieces={libraryPieces} loading={loadingLibrary}
       onCreate={createLibraryPiece} onUpdate={updateLibraryPiece} onDelete={deleteLibraryPiece}
       onUploadAudio={uploadLibraryAudio} onUploadNotation={uploadLibraryNotation} onUploadPdf={uploadLibraryPdf} myPart={profile?.part}
+      choirName={currentChoirName}
     />
   );
   else if (screen === "messages") content = (
